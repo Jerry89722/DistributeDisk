@@ -8,6 +8,7 @@
 #define __CLNTTHREAD_H
 
 #include <list>
+#include <deque>
 
 #include <ev++.h>
 #include <uuid/uuid.h>
@@ -40,15 +41,17 @@ enum __HW_CLNT_CMD{
 	_HW_CMD_LAST
 };
 
+class ClntThread;
+
 struct ClntInfo{
-	uint32_t cid;
+	uint32_t& cid;
+	ClntThread& clnt_thread;
 	string name;
 };
 
 struct CmdInfo{
-	__HW_CLNT_CMD cmd;
-	uuid_t uuid;
-	list<string> cmd_list;
+	uint32_t cid_from;
+	string str_cmd;
 };
 
 class Payload{
@@ -66,11 +69,11 @@ public:
 
 	~ClntThread(void);
 	
-	static list<ClntInfo> sm_clnt_list;
-
 	void start(void);
 
 	void work_start(void);
+
+	void notify_me(void);
 	
 	void recv_handle(ev::io& watcher, int event);
 
@@ -80,12 +83,19 @@ public:
 
 	void cmd_parse(Payload& r_paylaod);
 
+	int cmd_push_destination(Payload& payload, uint32_t cid);
+
 	static int stream_recv(int fd, uint8_t* buf, int len, int retry_times);
+
+	static list<ClntInfo> sm_clnt_list;
+
+	deque<CmdInfo> m_deque_cmds;
 
 private:
 	Payload m_payload;
 	uint8_t m_hbuf[HW_HEADER_LEN];
 	int m_fd;
+	uint32_t m_cid;
 	pthread_t m_tid;
 	ev::default_loop m_loop;
 	ev::io m_recv_watcher;

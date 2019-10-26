@@ -84,10 +84,16 @@ int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
 		return -1;
 	}
 	
-	ClntInfo ci = {};
+	m_cid = cid;
 
-	ci.cid = cid;
+	ClntInfo ci = {
+		.cid = m_cid,
+		.clnt_thread = *this
+	};
+
+	// ci.cid = cid;
 	ci.name = string((char*)(r_payload.m_buf), r_payload.m_offset);
+	// ci.clnt_thread = *this;
 
 	sm_clnt_list.push_back(ci);
 
@@ -219,7 +225,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		return ;
 	}else{
 		
-		cout << "body recv done, content: " << m_payload.m_buf << endl;
+		cout << "body recved, content: " << m_payload.m_buf << endl;
 		
 		m_payload.m_offset = len;
 	}
@@ -237,6 +243,8 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		
 		break;
 	case _HW_DATA_TYPE_CMD:
+
+		cmd_push_destination(m_payload, cid);
 		
 		break;
 	default:
@@ -245,11 +253,32 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	}
 }
 
+void ClntThread::notify_me(void)
+{
+	m_notify_watcher.send();
+}
+
+int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid)
+{
+	list<ClntInfo>::iterator it;
+	
+	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+		if(it->cid == cid){
+
+			CmdInfo cinfo = {};
+			cinfo.cid_from = m_cid;
+			cinfo.str_cmd = string((char*)payload.m_buf);
+
+			it->clnt_thread.m_deque_cmds.push_back(cinfo);
+			
+			it->clnt_thread.notify_me();
+		}
+	}
+
+	return 0;
+}
 void ClntThread::cmd_parse(Payload& r_payload)
 {
-	CmdInfo cmd_info = {};
-	
-	cmd_info.cmd = (__HW_CLNT_CMD)*(uint32_t*)r_payload.m_buf;
 	
 }
 
