@@ -28,6 +28,9 @@ Payload::Payload(int size)
 ClntThread::ClntThread(int fd)
 :m_payload(), m_fd(fd)
 {
+
+	pthread_mutex_init(&m_event_lock, NULL);
+
 	m_recv_watcher.set(m_fd, ev::READ);
 
 	m_recv_watcher.set<ClntThread, &ClntThread::recv_handle>(this);
@@ -38,11 +41,11 @@ ClntThread::ClntThread(int fd)
 
 	m_notify_watcher.start();
 
-	m_timer_watcher.set(1.0, 2.0);
+	m_timer_watcher.set(10.0, 60.0);
 
 	m_timer_watcher.set<ClntThread, &ClntThread::timer_handle>(this);
 
-	m_timer_watcher.start(1.0, 2.0);
+	m_timer_watcher.start();
 }
 
 ClntThread::~ClntThread(void)
@@ -253,7 +256,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	}
 }
 
-void ClntThread::notify_me(void)
+void ClntThread::notify_it(void)
 {
 	m_notify_watcher.send();
 }
@@ -271,20 +274,36 @@ int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid)
 
 			it->clnt_thread.m_deque_cmds.push_back(cinfo);
 			
-			it->clnt_thread.notify_me();
+			it->clnt_thread.notify_it();
+
+			break;
 		}
 	}
 
 	return 0;
 }
-void ClntThread::cmd_parse(Payload& r_payload)
-{
-	
-}
 
 void ClntThread::event_handle(ev::async& watcher, int event)
 {
 	cout << "event handle" << endl;
+	
+	pthread_t tid;
+
+	if(pthread_mutex_trylock(&m_event_lock)){
+		
+		cout << "event is handling" << endl;
+
+		return ;
+	}
+
+	pthread_create(&tid, NULL, cmd_handle, this);
+}
+
+void* ClntThread::cmd_handle(void* arg)
+{
+	ClntThread* pclnt = (ClntThread*)arg;
+	
+
 }
 
 void ClntThread::timer_handle(ev::timer& watcher, int event)

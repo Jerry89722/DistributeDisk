@@ -73,7 +73,7 @@ public:
 
 	void work_start(void);
 
-	void notify_me(void);
+	void notify_it(void);
 	
 	void recv_handle(ev::io& watcher, int event);
 
@@ -97,12 +97,15 @@ private:
 	int m_fd;
 	uint32_t m_cid;
 	pthread_t m_tid;
+	pthread_mutex_t m_event_lock;
+	
 	ev::default_loop m_loop;
 	ev::io m_recv_watcher;
 	ev::async m_notify_watcher;
 	ev::timer m_timer_watcher;
 
 	static void* run(void* arg);
+	static void* cmd_handle(void* arg);
 
 	int peer_clnt_verify(uint32_t cid, Payload& r_payload);
 };
