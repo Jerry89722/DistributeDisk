@@ -29,8 +29,6 @@ ClntThread::ClntThread(int fd)
 :m_payload(), m_fd(fd)
 {
 
-	pthread_mutex_init(&m_event_lock, NULL);
-
 	m_recv_watcher.set(m_fd, ev::READ);
 
 	m_recv_watcher.set<ClntThread, &ClntThread::recv_handle>(this);
@@ -57,7 +55,7 @@ void ClntThread::start(void)
 {
 	pthread_create(&m_tid, NULL, run, this); 
 
-	pthread_detach(m_tid);
+	pthread_create(&m_event_tid, NULL, cmd_handle_thread, this);
 }
 
 void* ClntThread::run(void* arg)
@@ -101,6 +99,62 @@ int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
 	sm_clnt_list.push_back(ci);
 
 	return 0;
+}
+
+int ClntThread::stream_send(int fd, uint8_t* buf, int len, int retry_times)
+{
+	
+	int t_len = 0, ret = 0, i;
+	
+	int n = (retry_times <= 0 ? 1: retry_times);
+
+	for(i = 0; i < n; ++i){
+		
+		ret = send(fd, buf + t_len, len - t_len, 0);
+		
+		if(ret == 0){
+			// connection is closed
+			
+			cout << "connection closed when send" << endl;
+			
+			return 0;
+
+		}else if(ret < 0){
+			// local error cause recv failed
+			
+			cout << "send failed because of local error" << endl;
+
+			return -1;
+
+		}else if(ret <= len){
+			
+			t_len += ret;
+			
+			if(t_len == len){
+
+				break;
+
+			}else if(t_len < len){
+				
+				usleep(50000);  // n * 10ms
+
+				continue;
+			}else if(t_len > len){
+
+				cout << "send abnormal 1" << endl;
+
+				return -1;
+			}
+		}else{
+			
+			cout << "send abnormal 2" << endl;
+
+			return -1;
+		}
+	}
+
+	return t_len;
+
 }
 
 // static 
@@ -261,15 +315,16 @@ void ClntThread::notify_it(void)
 	m_notify_watcher.send();
 }
 
-int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid)
+int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid) // des cid
 {
 	list<ClntInfo>::iterator it;
 	
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
 		if(it->cid == cid){
 
-			CmdInfo cinfo = {};
-			cinfo.cid_from = m_cid;
+			CmdInfo cinfo = {
+				.clnt_from = *it;
+			};
 			cinfo.str_cmd = string((char*)payload.m_buf);
 
 			it->clnt_thread.m_deque_cmds.push_back(cinfo);
@@ -283,27 +338,47 @@ int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid)
 	return 0;
 }
 
+/*
+ * this event was triggled by another clnt_thread
+ * */
+
 void ClntThread::event_handle(ev::async& watcher, int event)
 {
 	cout << "event handle" << endl;
 	
-	pthread_t tid;
+	pthread_kill(m_event_tid, SIGALRM);
 
-	if(pthread_mutex_trylock(&m_event_lock)){
-		
-		cout << "event is handling" << endl;
-
-		return ;
-	}
-
-	pthread_create(&tid, NULL, cmd_handle, this);
 }
 
-void* ClntThread::cmd_handle(void* arg)
+void* ClntThread::cmd_handle_thread(void* arg)
 {
 	ClntThread* pclnt = (ClntThread*)arg;
 	
+	signal(SIGALRM, SIG_IGN);
 
+	pclnt->thread_work();
+
+}
+
+void ClntThread::thread_work(void)
+{
+	while(1){
+		
+		cout << "thread work start waiting ..." << endl;
+
+		pause();
+		
+		CmdInfo cmdinfo = m_deque_cmds.pop_front();
+
+		cout << "cid_from: " << cmdinfo.clnt_from.m_cid << endl;
+		// 1. send cmd to peer clnt
+		//
+		// 2. recv result from peer clnt
+		//
+		// 3. send 
+		
+		stream_send(cmdinfo.clnt_from.m_fd, "handle done", strlen("handle done"), 0);
+	}
 }
 
 void ClntThread::timer_handle(ev::timer& watcher, int event)

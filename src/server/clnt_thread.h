@@ -50,7 +50,7 @@ struct ClntInfo{
 };
 
 struct CmdInfo{
-	uint32_t cid_from;
+	ClntThread& clnt_from;
 	string str_cmd;
 };
 
@@ -83,9 +83,13 @@ public:
 
 	void cmd_parse(Payload& r_paylaod);
 
+	void thread_work(void);
+
 	int cmd_push_destination(Payload& payload, uint32_t cid);
 
 	static int stream_recv(int fd, uint8_t* buf, int len, int retry_times);
+
+	static int stream_send(int fd, uint8_t* buf, int len, int retry_times);
 
 	static list<ClntInfo> sm_clnt_list;
 
@@ -97,6 +101,7 @@ private:
 	int m_fd;
 	uint32_t m_cid;
 	pthread_t m_tid;
+	pthread_t m_event_tid;
 	pthread_mutex_t m_event_lock;
 	
 	ev::default_loop m_loop;
@@ -105,7 +110,7 @@ private:
 	ev::timer m_timer_watcher;
 
 	static void* run(void* arg);
-	static void* cmd_handle(void* arg);
+	static void* cmd_handle_thread(void* arg);
 
 	int peer_clnt_verify(uint32_t cid, Payload& r_payload);
 };
