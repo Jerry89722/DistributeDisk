@@ -8,7 +8,8 @@
 #include <iostream>
 
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
+// #include <strings.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -17,7 +18,7 @@
 
 using namespace std;
 
-list<ClntInfo> ClntThread::sm_clnt_list;
+list<ClntThread*> ClntThread::sm_clnt_list;
 
 Payload::Payload(int size)
 :m_offset(0), m_tlen(size)
@@ -26,7 +27,7 @@ Payload::Payload(int size)
 }
 
 ClntThread::ClntThread(int fd)
-:m_payload(), m_fd(fd)
+:m_payload_request(), m_payload_reply(HW_BODY_BUF_MAX_LEN + 8), m_fd(fd)
 {
 
 	m_recv_watcher.set(m_fd, ev::READ);
@@ -35,9 +36,13 @@ ClntThread::ClntThread(int fd)
 
 	m_recv_watcher.start();
 
-	m_notify_watcher.set<ClntThread, &ClntThread::event_handle>(this);
+	m_req_watcher.set<ClntThread, &ClntThread::request_event_handle>(this);
 
-	m_notify_watcher.start();
+	m_req_watcher.start();
+
+	m_rep_watcher.set<ClntThread, &ClntThread::request_event_handle>(this);
+
+	m_rep_watcher.start();
 
 	m_timer_watcher.set(10.0, 60.0);
 
@@ -53,9 +58,11 @@ ClntThread::~ClntThread(void)
 
 void ClntThread::start(void)
 {
-	pthread_create(&m_tid, NULL, run, this); 
+	pthread_create(&m_tid, NULL, run, this);
 
-	pthread_create(&m_event_tid, NULL, cmd_handle_thread, this);
+	pthread_create(&m_request_tid, NULL, request_handle_thread, this);
+
+	pthread_create(&m_reply_tid, NULL, reply_handle_thread, this);
 }
 
 void* ClntThread::run(void* arg)
@@ -70,10 +77,11 @@ void* ClntThread::run(void* arg)
 void ClntThread::work_start(void)
 {
 	cout << "a client connection founded" << endl;
-
-	m_loop.run(0);
-
-	cout << "loop done" << endl;
+	
+	while(1){
+		m_loop.run(ev::ONCE);
+		cout << "loop done" << endl;
+	}
 }
 
 int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
@@ -87,16 +95,9 @@ int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
 	
 	m_cid = cid;
 
-	ClntInfo ci = {
-		.cid = m_cid,
-		.clnt_thread = *this
-	};
+	m_name = string((char*)(r_payload.m_buf), r_payload.m_offset);
 
-	// ci.cid = cid;
-	ci.name = string((char*)(r_payload.m_buf), r_payload.m_offset);
-	// ci.clnt_thread = *this;
-
-	sm_clnt_list.push_back(ci);
+	sm_clnt_list.push_back(this);
 
 	return 0;
 }
@@ -254,17 +255,17 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	cout << "type: " << type << endl;
 	cout << "cid: " << cid << endl;
 
-	if(size > m_payload.m_tlen){
+	if(size > m_payload_request.m_tlen){
 
 		cout << "payload data too long" << endl;
 		
 		return ;
 	}
 
-	m_payload.m_offset = 0;
-	bzero(m_payload.m_buf, m_payload.m_tlen);
+	m_payload_request.m_offset = 0;
+	bzero(m_payload_request.m_buf, m_payload_request.m_tlen);
 
-	len = stream_recv(m_fd, m_payload.m_buf, size, 0);
+	len = stream_recv(m_fd, m_payload_request.m_buf, size, 0);
 	if(len == 0){
 		
 		cout << "connection closed when recving body" << endl;
@@ -282,15 +283,15 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		return ;
 	}else{
 		
-		cout << "body recved, content: " << m_payload.m_buf << endl;
+		cout << "body recved, content: " << m_payload_request.m_buf << endl;
 		
-		m_payload.m_offset = len;
+		m_payload_request.m_offset = len;
 	}
 
 	switch(type){
 	case _HW_DATA_TYPE_LOGIN:
 		
-		peer_clnt_verify(cid, m_payload);
+		peer_clnt_verify(cid, m_payload_request);
 		
 		break;
 	case _HW_DATA_TYPE_HEARTBEAT:
@@ -301,7 +302,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		break;
 	case _HW_DATA_TYPE_CMD:
 
-		cmd_push_destination(m_payload, cid);
+		request_push_destination(m_payload_request, cid);
 		
 		break;
 	default:
@@ -310,47 +311,65 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	}
 }
 
-void ClntThread::notify_it(void)
+void ClntThread::notify_it(int which)
 {
-	m_notify_watcher.send();
+	if(which == HW_RECVED_EVENT){
+
+		m_req_watcher.send();
+
+	}else if(which == HW_SEND_EVENT){
+		
+		m_rep_watcher.send();
+	}
 }
 
-int ClntThread::cmd_push_destination(Payload& payload, uint32_t cid) // des cid
+int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des cid
 {
-	list<ClntInfo>::iterator it;
+	list<ClntThread*>::iterator it;
 	
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
-		if(it->cid == cid){
 
-			CmdInfo cinfo = {
-				.clnt_from = *it;
+		if((*it)->m_cid == cid){
+
+			InteractiveData data = {
+				.clnt_from = **it
 			};
-			cinfo.str_cmd = string((char*)payload.m_buf);
 
-			it->clnt_thread.m_deque_cmds.push_back(cinfo);
+			data.data_str = string((char*)payload.m_buf);
+
+			(*it)->m_deque_cmds.push_back(data);
 			
-			it->clnt_thread.notify_it();
-
-			break;
-		}
-	}
-
-	return 0;
-}
-
-/*
+			(*it)->notify_it(HW_RECVED_EVENT);  // will change to dest client thread
+														  //
+			break;										//	
+		}											  //	
+	}												//
+												  //
+	return 0;									//
+}											  //
+											//
+/*										  |/_
  * this event was triggled by another clnt_thread
  * */
-
-void ClntThread::event_handle(ev::async& watcher, int event)
+void ClntThread::request_event_handle(ev::async& watcher, int event)
 {
 	cout << "event handle" << endl;
-	
-	pthread_kill(m_event_tid, SIGALRM);
+
+	if(&watcher == &m_req_watcher){
+		
+		cout << "request event handle" << endl;
+
+		pthread_kill(m_request_tid, SIGALRM);
+	}else if(&watcher == &m_rep_watcher){
+		
+		cout << "reply event handle" << endl;
+
+		pthread_kill(m_reply_tid, SIGALRM);
+	}
 
 }
 
-void* ClntThread::cmd_handle_thread(void* arg)
+void* ClntThread::request_handle_thread(void* arg)
 {
 	ClntThread* pclnt = (ClntThread*)arg;
 	
@@ -358,6 +377,7 @@ void* ClntThread::cmd_handle_thread(void* arg)
 
 	pclnt->thread_work();
 
+	return NULL;
 }
 
 void ClntThread::thread_work(void)
@@ -367,17 +387,55 @@ void ClntThread::thread_work(void)
 		cout << "thread work start waiting ..." << endl;
 
 		pause();
-		
-		CmdInfo cmdinfo = m_deque_cmds.pop_front();
 
-		cout << "cid_from: " << cmdinfo.clnt_from.m_cid << endl;
-		// 1. send cmd to peer clnt
-		//
-		// 2. recv result from peer clnt
-		//
-		// 3. send 
+		InteractiveData data = m_deque_cmds[0];
 		
-		stream_send(cmdinfo.clnt_from.m_fd, "handle done", strlen("handle done"), 0);
+		m_deque_cmds.pop_front();
+
+		InteractiveData dest_data = {
+			.clnt_from = *this
+		};
+		
+		cout << "cid_from: " << data.clnt_from.m_cid << endl;
+		// 1. send cmd to peer clnt
+		
+		// 2. recv result from peer clnt
+		
+		// 3. notify_it();
+		dest_data.data_str = "cmd handle results";
+
+		dest_data.clnt_from.m_deque_results.push_back(dest_data);
+
+		data.clnt_from.notify_it(HW_SEND_EVENT);
+	}
+}
+
+void* ClntThread::reply_handle_thread(void* arg)
+{
+	ClntThread* pclnt = (ClntThread*)arg;
+	
+	signal(SIGALRM, SIG_IGN);
+
+	pclnt->reply_thread();
+
+	return NULL;
+}
+
+void ClntThread::reply_thread(void)
+{
+	while(1){
+		pause();
+		
+		InteractiveData data = m_deque_results[0];
+		m_deque_results.pop_front();
+
+		*(uint16_t*)m_payload_reply.m_buf = data.data_str.size();
+		*(uint16_t*)(m_payload_reply.m_buf + 2) = _HW_CMD_LS;
+		*(uint32_t*)(m_payload_reply.m_buf + 4) = data.clnt_from.m_cid;
+
+		memcpy(m_payload_reply.m_buf + 8, data.data_str.c_str(), data.data_str.size());
+
+		stream_send(m_fd, m_payload_reply.m_buf, 8 + data.data_str.size(), 0);
 	}
 }
 

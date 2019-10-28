@@ -75,7 +75,7 @@ void ServerSocket::clntAccept(void)
 
 			continue;
 		}
-
+		cout << "new clnt thread" << endl;
 		(new ClntThread(fd))->start();
 	}
 }
