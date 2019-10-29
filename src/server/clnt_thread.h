@@ -54,6 +54,7 @@ struct InteractiveData{
 class Payload{
 public:
 	Payload(int size = HW_BODY_BUF_MAX_LEN);
+	~Payload();
 	uint8_t* m_buf;
 	uint16_t m_offset;
 	const uint16_t m_tlen;
@@ -105,7 +106,6 @@ private:
 	pthread_t m_tid;
 	pthread_t m_request_tid;
 	pthread_t m_reply_tid;
-	pthread_mutex_t m_event_lock;
 	
 	ev::dynamic_loop m_loop;
 	ev::io m_recv_watcher;
@@ -116,6 +116,8 @@ private:
 	static void* run(void* arg);
 	static void* request_handle_thread(void* arg);
 	static void* reply_handle_thread(void* arg);
+
+	static void sig_skip(int signo){}
 
 	int peer_clnt_verify(uint32_t cid, Payload& r_payload);
 };
