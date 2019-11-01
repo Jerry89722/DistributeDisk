@@ -70,7 +70,7 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="centerLayout" stretch="1,2">
+       <layout class="QHBoxLayout" name="centerLayout" stretch="0,1">
         <item>
          <widget class="QTreeView" name="fileTv"/>
         </item>

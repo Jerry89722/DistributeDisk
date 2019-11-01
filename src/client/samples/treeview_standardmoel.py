@@ -21,15 +21,13 @@ class TreeView(QTreeView):
         item2 = QStandardItem("bluetooth")
         item3 = QStandardItem("crond")
         item4 = QStandardItem("cups")
-        item5 = QStandardItem("ttys")
-        item6 = QStandardItem("six")
+        item5 = QStandardItem("fifth")
 
         self.model.setItem(0, 0, item1)
         self.model.setItem(1, 0, item2)
         self.model.setItem(2, 0, item3)
         self.model.setItem(3, 0, item4)
-        self.model.appendRow(item5)
-        item4.appendRow(item6)
+        item4.appendRow(item5)
 
         parent = QModelIndex()
         for i in range(0, 4):
