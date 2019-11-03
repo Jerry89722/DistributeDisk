@@ -4,64 +4,30 @@ import sys
 from builtins import len
 
 from PyQt5.QtCore import Qt, QModelIndex
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView
+from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView, QMainWindow, \
+    QFileSystemModel
+from client_ui import Ui_MainWindow
+from local_tree import LocalTree
+from remote_tree import RemoteTree
+from clnt_socket import ClntSocket
 
-host = "www.huiwanit.cn"
-port = 9001
 
-
-class TreeView(QTreeView):
+class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__()
-        self.model = QStandardItemModel(4, 2)
-        self.model.setHeaderData(0, Qt.Horizontal, "service")
-        self.model.setHeaderData(1, Qt.Horizontal, "Details")
-        item1 = QStandardItem("avahi-daemon")
-        item2 = QStandardItem("bluetooth")
-        item3 = QStandardItem("crond")
-        item4 = QStandardItem("cups")
-        item5 = QStandardItem("ttys")
-        item6 = QStandardItem("six")
-
-        self.model.setItem(0, 0, item1)
-        self.model.setItem(1, 0, item2)
-        self.model.setItem(2, 0, item3)
-        self.model.setItem(3, 0, item4)
-        self.model.appendRow(item5)
-        item4.appendRow(item6)
-
-        parent = QModelIndex()
-        for i in range(0, 4):
-            parent = self.model.index(0, 0, parent)
-            self.model.insertRows(0, 1, parent)
-            self.model.insertColumns(0, 1, parent)
-            index = self.model.index(0, 0, parent)
-            self.model.setData(index, i)
-
-        self.setModel(self.model)
-
-    def returnTheItems(self):
-        return self.model.findItems("*", Qt.MatchWildcard | Qt.MatchRecursive)
-        # item1.setIcon()
-
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            index0 = self.currentIndex()
-            print(index0.data().toString())
+        QMainWindow.__init__(self)
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.clnt_socket = ClntSocket()
+        self.clnt_socket.run()
+        self.local_tree = LocalTree(self.ui.localFileTv)
+        self.remote_tree = RemoteTree(self.ui.remoteFileTv, self.clnt_socket)
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    view = TreeView()
-    view.setEditTriggers(QAbstractItemView.NoEditTriggers)
-    # view.header().setResizeMode(QHeaderView.ResizeToContents)
-    view.resize(300, 280)
-
-    view.setWindowTitle("linux manager")
-    view.show()
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec_())
-
 
 
 

@@ -2,9 +2,39 @@ import struct
 import sys
 import socket
 import time
+from settings import *
 
-host = "www.huiwanit.cn"
-port = 9001
+import threading
+
+
+class ClntSocket:
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.t_sock = threading.Thread(target=self.run)
+        self.t_recv = None
+        self.t_send = None
+        self.tx_queue = list()
+        self.rx_queue = list()
+
+    def run(self):
+        try:
+            ip = socket.gethostbyname(HW_HOST)
+        except socket.gaierror:
+            print("host name could not be resolved")
+            sys.exit()
+
+        self.sock.connect((ip, HW_PORT))
+
+        self.t_recv = threading.Thread(target=self.recv_work)
+        self.t_send = threading.Thread(target=self.send_work)
+
+    def recv_work(self):
+        while True:
+            buf = self.sock.recv(4096)
+
+    def send_work(self):
+        while True:
+            self.sock.send(data)
 
 # str_a = "aaaaa"
 # data = struct.pack('HHI5s', 5, 2, 32, bytes(str_a.encode()))
@@ -13,18 +43,17 @@ port = 9001
 #
 # print(dest)
 
-
 if __name__ == "__main__":
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
-        remote_ip = socket.gethostbyname(host)
+        remote_ip = socket.gethostbyname(HW_HOST)
     except socket.gaierror:
         print("host name could not be resolved")
         sys.exit()
 
-    s.connect((remote_ip, port))
+    s.connect((remote_ip, HW_PORT))
     payload_content = "hp"
     payload_size = len(payload_content)
     payload_type = 0  # HW_DATA_TYPE_LOGIN

@@ -14,70 +14,87 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout_5">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0">
+     <layout class="QHBoxLayout" name="funcLayout" stretch="1,0">
       <item>
-       <layout class="QHBoxLayout" name="funcLayout" stretch="1,0">
+       <layout class="QHBoxLayout" name="pathLayout" stretch="0,10,0">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
-         <layout class="QHBoxLayout" name="pathLayout" stretch="0,10,0">
-          <property name="spacing">
-           <number>0</number>
+         <widget class="QLabel" name="pathLab">
+          <property name="text">
+           <string>Path:</string>
           </property>
-          <item>
-           <widget class="QLabel" name="pathLab">
-            <property name="text">
-             <string>Path:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="pathLe"/>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pathBtn">
-            <property name="text">
-             <string>Go</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="searchLayout" stretch="0,10,0">
-          <property name="spacing">
-           <number>0</number>
+         <widget class="QLineEdit" name="pathLe"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pathBtn">
+          <property name="text">
+           <string>Go</string>
           </property>
-          <item>
-           <widget class="QLabel" name="searchLab">
-            <property name="text">
-             <string>Key:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="searchLe"/>
-          </item>
-          <item>
-           <widget class="QPushButton" name="searchBtn">
-            <property name="text">
-             <string>search</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         </widget>
         </item>
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="centerLayout" stretch="0,1">
+       <layout class="QHBoxLayout" name="searchLayout" stretch="0,10,0">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
-         <widget class="QTreeView" name="fileTv"/>
+         <widget class="QLabel" name="searchLab">
+          <property name="text">
+           <string>Key:</string>
+          </property>
+         </widget>
         </item>
         <item>
-         <widget class="QListView" name="fileLv"/>
+         <widget class="QLineEdit" name="searchLe"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="searchBtn">
+          <property name="text">
+           <string>search</string>
+          </property>
+         </widget>
         </item>
        </layout>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,0">
+        <item>
+         <widget class="QLabel" name="localLab">
+          <property name="text">
+           <string>local files:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTreeView" name="localFileTv"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="remoteLab">
+          <property name="text">
+           <string>remote files:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTreeView" name="remoteFileTv"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QListView" name="fileLv"/>
       </item>
      </layout>
     </item>
@@ -89,7 +106,7 @@
      <x>0</x>
      <y>0</y>
      <width>778</width>
-     <height>21</height>
+     <height>26</height>
     </rect>
    </property>
   </widget>
