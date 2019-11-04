@@ -1,36 +1,32 @@
+import socket
 import struct
-import sys, socket
+import sys
+from builtins import len
 
-host = "www.huiwanit.cn"
-port = 9001
+from PyQt5.QtCore import Qt, QModelIndex
+from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView, QMainWindow, \
+    QFileSystemModel
+from client_ui import Ui_MainWindow
+from local_tree import LocalTree
+from remote_tree import RemoteTree
+from clnt_socket import ClntSocket
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        QMainWindow.__init__(self)
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.clnt_socket = ClntSocket()
+        self.local_tree = LocalTree(self.ui.localFileTv)
+        self.remote_tree = RemoteTree(self.ui.remoteFileTv, self.clnt_socket)
+
 
 if __name__ == "__main__":
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    try:
-        remote_ip = socket.gethostbyname(host)
-    except socket.gaierror:
-        print("host name could not be resolved")
-        sys.exit()
-
-    s.connect((remote_ip, port))
-    payload_content = "hp"
-    payload_size = len(payload_content)
-    payload_type = 0  # HW_DATA_TYPE_LOGIN
-    cid = 1
-    data = struct.pack('HHI{}s'.format(payload_size), payload_size, payload_type, cid, payload_content.encode("ascii"))
-
-    slen = s.send(data)
-
-    print("send len: ", slen)
-
-    buf = s.recv(4096)
-
-    print(str(buf))
-
-
-
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
 
 
 
