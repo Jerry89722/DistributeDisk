@@ -20,12 +20,15 @@ using namespace std;
 #define HW_SEND_EVENT		1
 
 #define HW_BODY_BUF_MAX_LEN		1024
-#define HW_HEADER_LEN			8
 
-#define HW_TINY_BUF_LEN			32
-#define HW_NORMAL_BUF_LEN		64
-#define HW_BIG_BUF_LEN			128
-#define HW_BIGGEST_BUF_LEN		256
+#define HW_HEADER_LEN			8
+#define HW_SEND_BUF_LEN			4*1024
+
+#define HW_TINIEST_BUF_LEN			32
+#define HW_TINY_BUF_LEN			64
+#define HW_NORMAL_BUF_LEN		128
+#define HW_BIG_BUF_LEN			256
+#define HW_BIGGEST_BUF_LEN		512
 
 enum __HW_DATA_TYPE{
 	_HW_DATA_TYPE_LOGIN,		// 0
@@ -46,15 +49,14 @@ enum __HW_CLNT_CMD{
 
 class ClntThread;
 
-struct InteractiveData{
-	ClntThread& clnt_from;
-	string data_str;
-};
-
 class Payload{
 public:
-	Payload(int size = HW_BODY_BUF_MAX_LEN);
+	Payload(ClntThread& ct, int size = HW_BODY_BUF_MAX_LEN);
+	Payload(const Payload& payload);
 	~Payload();
+	
+	ClntThread* m_pclnt_from;
+
 	uint8_t* m_buf;
 	uint16_t m_offset;
 	const uint16_t m_tlen;
@@ -76,12 +78,10 @@ public:
 	void recv_handle(ev::io& watcher, int event);
 
 	void request_event_handle(ev::async& watcher, int event);
-	void reply_event_handle(ev::async& watcher, int event);
 	
 	void timer_handle(ev::timer& watcher, int event);
 
-	void thread_work(void);
-	void reply_thread(void);
+	void request_thread(void);
 
 	int request_push_destination(Payload& payload, uint32_t cid);
 
@@ -91,35 +91,33 @@ public:
 
 	static list<ClntThread*> sm_clnt_list;
 
-	deque<InteractiveData> m_deque_cmds;
-	deque<InteractiveData> m_deque_results;
+	deque<Payload> m_deque_cmds;
+
+	uint32_t m_cid;
+	string m_name;
 
 private:
 	Payload m_payload_request;
 
-	Payload m_payload_reply;
-
 	uint8_t m_hbuf[HW_HEADER_LEN];
+	uint8_t* m_sbuf;
 	int m_fd;
-	uint32_t m_cid;
-	string m_name;
 	pthread_t m_tid;
 	pthread_t m_request_tid;
-	pthread_t m_reply_tid;
 	
 	ev::dynamic_loop m_loop;
 	ev::io m_recv_watcher;
 	ev::async m_req_watcher;
-	ev::async m_rep_watcher;
 	ev::timer m_timer_watcher;
 
-	static void* run(void* arg);
+	static void* work_thread(void* arg);
 	static void* request_handle_thread(void* arg);
-	static void* reply_handle_thread(void* arg);
 
 	static void sig_skip(int signo){}
 
 	int peer_clnt_verify(uint32_t cid, Payload& r_payload);
+
+	int pack(int type, Payload& payload);
 };
 
 #endif // __CLNTTHREAD_H 

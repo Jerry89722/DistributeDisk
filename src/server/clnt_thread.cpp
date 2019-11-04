@@ -8,8 +8,8 @@
 #include <iostream>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-// #include <strings.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -20,20 +20,32 @@ using namespace std;
 
 list<ClntThread*> ClntThread::sm_clnt_list;
 
-Payload::Payload(int size)
-:m_offset(0), m_tlen(size)
+/**********************payload*********************/
+Payload::Payload(ClntThread& clnt_from, int size)
+:m_pclnt_from(&clnt_from), m_offset(0), m_tlen(size)
 {
-	m_buf = (uint8_t*)malloc(m_tlen);
+	m_buf = new uint8_t[m_tlen];
+}
+
+Payload::Payload(const Payload& payload)
+:m_pclnt_from(payload.m_pclnt_from), m_offset(payload.m_offset), m_tlen(payload.m_offset)
+{
+	m_buf = new uint8_t[m_tlen];
+
+	memcpy(m_buf, payload.m_buf, m_offset);
 }
 
 Payload::~Payload()
 {
-	free(m_buf);
+	delete m_buf;
 }
 
+/**********************payload*********************/
+
 ClntThread::ClntThread(int fd)
-:m_payload_request(), m_payload_reply(HW_BODY_BUF_MAX_LEN + 8), m_fd(fd)
+:m_payload_request(*this), m_fd(fd)
 {
+	m_sbuf = new uint8_t[HW_SEND_BUF_LEN];
 
 	m_recv_watcher.set(m_fd, ev::READ);
 	m_recv_watcher.set(m_loop);
@@ -44,10 +56,6 @@ ClntThread::ClntThread(int fd)
 	m_req_watcher.set(m_loop);
 	m_req_watcher.start();
 
-	m_rep_watcher.set<ClntThread, &ClntThread::request_event_handle>(this);
-	m_rep_watcher.set(m_loop);
-	m_rep_watcher.start();
-
 	m_timer_watcher.set(10.0, 60.0);
 	m_timer_watcher.set(m_loop);
 	m_timer_watcher.set<ClntThread, &ClntThread::timer_handle>(this);
@@ -57,26 +65,32 @@ ClntThread::ClntThread(int fd)
 ClntThread::~ClntThread()
 {
 	m_timer_watcher.stop();
+	
 	m_req_watcher.stop();
+	
 	m_req_watcher.stop();
+	
 	m_recv_watcher.stop();
+	
 	m_loop.break_loop();
+	
 	close(m_fd);
-	pthread_exit(m_request_tid);
-	pthread_exit(m_reply_tid);
-	pthread_exit(m_tid);
+	
+	pthread_cancel(m_request_tid);
+	
+	pthread_cancel(m_tid);
 }
 
 void ClntThread::start(void)
 {
-	pthread_create(&m_tid, NULL, run, this);
+	pthread_create(&m_tid, NULL, work_thread, this);
 
+	/* use to handle clnt request, create here and not exit util clnt close, 
+	 * in case create this thread frequently */
 	pthread_create(&m_request_tid, NULL, request_handle_thread, this);
-
-	pthread_create(&m_reply_tid, NULL, reply_handle_thread, this);
 }
 
-void* ClntThread::run(void* arg)
+void* ClntThread::work_thread(void* arg)
 {
 	ClntThread* p_clnt = (ClntThread*) arg;
 
@@ -90,7 +104,7 @@ void ClntThread::work_start(void)
 	cout << "a client connection founded" << endl;
 	
 	while(1){
-		m_loop.run(ev::ONCE);
+		m_loop.run(0);
 		cout << "loop done" << endl;
 	}
 }
@@ -109,6 +123,29 @@ int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
 	m_name = string((char*)(r_payload.m_buf), r_payload.m_offset);
 
 	sm_clnt_list.push_back(this);
+
+	list<ClntThread*>::iterator it;
+
+	Payload pld = Payload(*this, HW_NORMAL_BUF_LEN);
+
+	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+
+		if((*it)->m_cid != cid){
+
+			snprintf((char*)pld.m_buf, pld.m_tlen, "{[\"name\":\"%s\",\"cid\":\"%d\"]}", (*it)->m_name.c_str(), (*it)->m_cid);
+		}
+	}
+
+	if(strlen((char*)pld.m_buf) > 0){
+
+		pld.m_offset = strlen((char*)pld.m_buf) + 1;
+
+		cout << (char*)pld.m_buf << endl;
+
+		m_deque_cmds.push_back(pld);
+
+		notify_it(HW_RECVED_EVENT);
+	}
 
 	return 0;
 }
@@ -329,10 +366,6 @@ void ClntThread::notify_it(int which)
 	if(which == HW_RECVED_EVENT){
 
 		m_req_watcher.send();
-
-	}else if(which == HW_SEND_EVENT){
-		
-		m_rep_watcher.send();
 	}
 }
 
@@ -343,21 +376,19 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
 	cout << "request cid: " << cid << endl;
 
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+		
 		cout << "traverse cid: " << (*it)->m_cid << endl;
+
 		if((*it)->m_cid == cid){
 
-			InteractiveData data = {
-				.clnt_from = *this
-			};
+			Payload pld = payload;
 
-			data.data_str = string((char*)payload.m_buf);
-
-			(*it)->m_deque_cmds.push_back(data);
+			(*it)->m_deque_cmds.push_back(pld);
 			
 			(*it)->notify_it(HW_RECVED_EVENT);  // will change to dest client thread
 														  //
-			break;										//	
-		}											  //	
+			break;										//
+		}											  //
 	}												//
 												  //
 	return 0;									//
@@ -375,13 +406,7 @@ void ClntThread::request_event_handle(ev::async& watcher, int event)
 		cout << "request event handle, to id: " << m_request_tid << endl;
 
 		pthread_kill(m_request_tid, SIGALRM);
-	}else if(&watcher == &m_rep_watcher){
-		
-		cout << "reply event handle, to id: " << m_reply_tid << endl;
-
-		pthread_kill(m_reply_tid, SIGALRM);
 	}
-
 }
 
 void* ClntThread::request_handle_thread(void* arg)
@@ -390,78 +415,56 @@ void* ClntThread::request_handle_thread(void* arg)
 	
 	signal(SIGALRM, sig_skip);
 
-	pclnt->thread_work();
+	pclnt->request_thread();
 
 	return NULL;
 }
 
-void ClntThread::thread_work(void)
+void ClntThread::request_thread(void)
 {
+	int ret = 0;
+
 	while(1){
 		
-		cout << "thread work start waiting ..., id: " << m_request_tid << endl;
+		cout << "thread work start waiting ..., tid: " << m_request_tid << endl;
 
 		pause();
+
 		cout << "request handle work start" << endl;
 
-		InteractiveData data = m_deque_cmds[0];
+		Payload req_pld = m_deque_cmds[0];
 		
 		m_deque_cmds.pop_front();
 
-		InteractiveData dest_data = {
-			.clnt_from = *this
-		};
-		
-		cout << "cid_from: " << data.clnt_from.m_cid << endl;
-		// 1. send cmd to peer clnt
-		
-		// 2. recv result from peer clnt
-		
-		// 3. notify_it();
-		dest_data.data_str = "cmd handle results";
+		cout << "cid_from: " << req_pld.m_pclnt_from->m_cid << endl;
 
-		data.clnt_from.m_deque_results.push_back(dest_data);
+		ret = pack(_HW_DATA_TYPE_CMD, req_pld);
 
-		data.clnt_from.notify_it(HW_SEND_EVENT);
+		ret = stream_send(m_fd, m_sbuf, 8 + req_pld.m_offset, 0);
+
 	}
 }
 
-void* ClntThread::reply_handle_thread(void* arg)
-{
-	ClntThread* pclnt = (ClntThread*)arg;
-	
-	signal(SIGALRM, sig_skip);
-
-	pclnt->reply_thread();
-
-	return NULL;
-}
-
-void ClntThread::reply_thread(void)
-{
-	while(1){
-		
-		cout << "reply thread work start waiting ..., id: " << m_reply_tid << endl;
-		
-		pause();
-		cout << "reply work start" << endl;
-		
-		InteractiveData data = m_deque_results[0];
-		cout << "data str reply:" << data.data_str << endl;
-		m_deque_results.pop_front();
-
-		*(uint16_t*)m_payload_reply.m_buf = data.data_str.size();
-		*(uint16_t*)(m_payload_reply.m_buf + 2) = _HW_CMD_LS;
-		*(uint32_t*)(m_payload_reply.m_buf + 4) = data.clnt_from.m_cid;
-
-		memcpy(m_payload_reply.m_buf + 8, data.data_str.c_str(), data.data_str.size());
-
-		stream_send(m_fd, m_payload_reply.m_buf, 8 + data.data_str.size(), 0);
-	}
-}
 
 void ClntThread::timer_handle(ev::timer& watcher, int event)
 {
 	cout << "timer handle" << endl;
+}
+
+int ClntThread::pack(int type, Payload& payload)
+{
+	uint8_t* p = m_sbuf;
+	*(uint16_t*)p = payload.m_offset;
+	p += 2;
+
+	*(uint16_t*)p = _HW_DATA_TYPE_CMD;
+	p += 2;
+
+	*(uint32_t*)p = payload.m_pclnt_from->m_cid;
+	p += 4;
+
+	memcpy(p, payload.m_buf, payload.m_offset);
+
+	return 0;
 }
 
