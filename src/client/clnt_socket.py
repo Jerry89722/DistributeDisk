@@ -10,13 +10,13 @@ import threading
 class ClntSocket:
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.t_sock = threading.Thread(target=self.run)
+        self.t_sock = threading.Thread(target=self.start())
         self.t_recv = None
         self.t_send = None
         self.tx_queue = list()
         self.rx_queue = list()
 
-    def run(self):
+    def start(self):
         try:
             ip = socket.gethostbyname(HW_HOST)
         except socket.gaierror:
@@ -30,41 +30,23 @@ class ClntSocket:
 
     def recv_work(self):
         while True:
-            buf = self.sock.recv(4096)
+            recv_buf = self.sock.recv(4096)
+            content = struct.unpack('HHI{}s'.format(len(recv_buf) - 8), recv_buf)
+            print("recved content: ", content)
 
     def send_work(self):
         while True:
-            self.sock.send(data)
+            time.sleep(2)
+            if len(self.tx_queue) > 0:
+                self.sock.send(self.tx_queue.pop(0))
 
-# str_a = "aaaaa"
-# data = struct.pack('HHI5s', 5, 2, 32, bytes(str_a.encode()))
-#
-# dest = struct.unpack('HHI{}s'.format(len(data) - 8), data)
-#
-# print(dest)
+    def pack(self, cmd):
+        if cmd == HW_DATA_TYPE_LOGIN:
+            bin_data = struct.pack('HHI{}s'.format(len(CLNT_NAME)), len(CLNT_NAME), cmd, CLNT_ID,
+                                   CLNT_NAME.encode("ascii"))
+            self.tx_queue.append(bin_data)
 
-if __name__ == "__main__":
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    try:
-        remote_ip = socket.gethostbyname(HW_HOST)
-    except socket.gaierror:
-        print("host name could not be resolved")
-        sys.exit()
-
-    s.connect((remote_ip, HW_PORT))
-    payload_content = "hp"
-    payload_size = len(payload_content)
-    payload_type = 0  # HW_DATA_TYPE_LOGIN
-    cid = 1
-    data = struct.pack('HHI{}s'.format(payload_size), payload_size, payload_type, cid, payload_content.encode("ascii"))
-
-    slen = s.send(data)
-    print("send len: ", slen)
-
-    input("pause: ")
-
+    '''
     payload_content = "ls $/"
     payload_size = len(payload_content)
     payload_type = 3
@@ -78,7 +60,5 @@ if __name__ == "__main__":
 
     res = struct.unpack('HHI{}s'.format(len(data) - 8), data)
 
-    print(res)
-
-    input("done: ")
+    '''
 

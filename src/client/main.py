@@ -18,7 +18,6 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.clnt_socket = ClntSocket()
-        self.clnt_socket.run()
         self.local_tree = LocalTree(self.ui.localFileTv)
         self.remote_tree = RemoteTree(self.ui.remoteFileTv, self.clnt_socket)
 
