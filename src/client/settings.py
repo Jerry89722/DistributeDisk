@@ -1,5 +1,5 @@
-CLNT_NAME = "hp"
-CLNT_ID = 1
+CLNT_NAME = "dell"
+CLNT_ID = 2
 HW_HOST = "www.huiwanit.cn"
 HW_PORT = 9001
 

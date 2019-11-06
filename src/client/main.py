@@ -20,6 +20,7 @@ class MainWindow(QMainWindow):
         self.clnt_socket = ClntSocket()
         self.local_tree = LocalTree(self.ui.localFileTv)
         self.remote_tree = RemoteTree(self.ui.remoteFileTv, self.clnt_socket)
+        self.clnt_socket.send_msg.connect(self.remote_tree.ui_event_handle)
 
 
 if __name__ == "__main__":
