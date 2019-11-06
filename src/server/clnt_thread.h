@@ -11,7 +11,6 @@
 #include <deque>
 
 #include <ev++.h>
-#include <uuid/uuid.h>
 #include <stdint.h>
 
 using namespace std;
@@ -56,7 +55,8 @@ public:
 	~Payload();
 	
 	ClntThread* m_pclnt_from;
-
+	
+	uint16_t m_type;
 	uint8_t* m_buf;
 	uint16_t m_offset;
 	const uint16_t m_tlen;
@@ -82,8 +82,6 @@ public:
 	void timer_handle(ev::timer& watcher, int event);
 
 	void request_thread(void);
-
-	int request_push_destination(Payload& payload, uint32_t cid);
 
 	static int stream_recv(int fd, uint8_t* buf, int len, int retry_times);
 
@@ -115,9 +113,11 @@ private:
 
 	static void sig_skip(int signo){}
 
-	int peer_clnt_verify(uint32_t cid, Payload& r_payload);
+	int peer_clnt_verify(Payload& r_payload, uint32_t cid);
 
-	int pack(int type, Payload& payload);
+	int request_push_destination(Payload& payload, uint32_t cid);
+
+	int pack(Payload& payload);
 };
 
 #endif // __CLNTTHREAD_H 

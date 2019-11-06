@@ -14,6 +14,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "cJSON.h"
+
 #include "clnt_thread.h"
 
 using namespace std;
@@ -109,7 +111,7 @@ void ClntThread::work_start(void)
 	}
 }
 
-int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
+int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 {
 	if(r_payload.m_offset < 1){
 
@@ -128,17 +130,39 @@ int ClntThread::peer_clnt_verify(uint32_t cid, Payload& r_payload)
 
 	Payload pld = Payload(*this, HW_NORMAL_BUF_LEN);
 
+	cJSON* root = cJSON_CreateArray();
+
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
 
 		if((*it)->m_cid != cid){
 
-			snprintf((char*)pld.m_buf, pld.m_tlen, "{[\"name\":\"%s\",\"cid\":\"%d\"]}", (*it)->m_name.c_str(), (*it)->m_cid);
+			cJSON* clnt_node = cJSON_CreateObject();
+
+			cJSON_AddStringToObject(clnt_node, "name", (*it)->m_name.c_str());
+
+			cJSON_AddNumberToObject(clnt_node, "cid", (*it)->m_cid);
+
+			cJSON_AddItemToArray(root, clnt_node);
 		}
 	}
 
-	if(strlen((char*)pld.m_buf) > 0){
+	if(cJSON_GetArraySize(root) > 0){
 
-		pld.m_offset = strlen((char*)pld.m_buf) + 1;
+		char* s = cJSON_PrintUnformatted(root);
+
+		memcpy(pld.m_buf, s, strlen(s));
+
+		pld.m_offset = strlen(s);
+
+		cout << "clnts info: " << s << endl;
+
+		free(s);
+	}
+
+	cJSON_Delete(root);
+
+
+	if(strlen((char*)pld.m_buf) > 0){
 
 		cout << (char*)pld.m_buf << endl;
 
@@ -304,6 +328,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	cout << "size: " << size << endl;
 	cout << "type: " << type << endl;
 	cout << "cid: " << cid << endl;
+	m_payload_request.m_type = type;
 
 	if(size > m_payload_request.m_tlen){
 
@@ -341,7 +366,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	switch(type){
 	case _HW_DATA_TYPE_LOGIN:
 		
-		peer_clnt_verify(cid, m_payload_request);
+		peer_clnt_verify(m_payload_request, cid);
 		
 		break;
 	case _HW_DATA_TYPE_HEARTBEAT:
@@ -438,7 +463,7 @@ void ClntThread::request_thread(void)
 
 		cout << "cid_from: " << req_pld.m_pclnt_from->m_cid << endl;
 
-		ret = pack(_HW_DATA_TYPE_CMD, req_pld);
+		ret = pack(req_pld);
 
 		ret = stream_send(m_fd, m_sbuf, 8 + req_pld.m_offset, 0);
 
@@ -451,13 +476,13 @@ void ClntThread::timer_handle(ev::timer& watcher, int event)
 	cout << "timer handle" << endl;
 }
 
-int ClntThread::pack(int type, Payload& payload)
+int ClntThread::pack(Payload& payload)
 {
 	uint8_t* p = m_sbuf;
 	*(uint16_t*)p = payload.m_offset;
 	p += 2;
 
-	*(uint16_t*)p = _HW_DATA_TYPE_CMD;
+	*(uint16_t*)p = payload.m_type;
 	p += 2;
 
 	*(uint32_t*)p = payload.m_pclnt_from->m_cid;
