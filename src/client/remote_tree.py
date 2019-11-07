@@ -23,7 +23,7 @@ class RemoteTree(QObject):
                 item = QStandardItem(i["name"])
                 self.remote_model.appendRow(item)
                 self.clnt_list.append(msg[2])
-                self.clnt_socket.ls_cmd_send(i["cid"], "/$" + i["name"] + "/")
+                self.clnt_socket.hw_cmd_tree(i["cid"], "/")
 
         '''
         item1 = QStandardItem(CLNT_NAME)

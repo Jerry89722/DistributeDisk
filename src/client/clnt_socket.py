@@ -53,18 +53,20 @@ class ClntSocket(QObject):
         self.t_send = threading.Thread(target=self.send_work, args=(self.tx_event,))
         self.t_recv.start()
         self.t_send.start()
+        self.t_work.start()
         cmd_uuid = uuid.uuid1().__str__()
         payload = {"uuid": cmd_uuid, "name": CLNT_NAME}
         payload = json.dumps(payload)
         payload_len = len(payload)
-        payload.encode("utf-8")
+        payload = payload.encode("ascii")
         self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload, payload_len)
 
     def recv_work(self):
         print("recv work thread start")
         while True:
+            print("recv waiting ...")
             header = self.sock.recv(HW_SOCK_HEADER_LEN)
-
+            print("recved header: ", header)
             header_tuple = struct.unpack('HHI', header)
             print("recved content: ", header_tuple)
 
@@ -82,11 +84,13 @@ class ClntSocket(QObject):
             if len(self.tx_queue) > 0:
                 node = self.tx_queue.pop(0)
                 self.sent_queue.append(node)
-                self.sock.send(node)
+                s_len = self.sock.send(node)
+                print("send len: ", s_len)
             else:
                 event.clear()
 
     def push_back_tx_queue(self, cmd, data, size, cid=CLNT_ID):
+        # print("size: %d, cmd: %d, cid: %d, data: %s" % (size, cmd, cid, data.decode()))
         bin_data = struct.pack('HHI{}s'.format(size), size, cmd, cid, data)
         self.tx_queue.append(bin_data)
         self.tx_event.set()
@@ -97,18 +101,21 @@ class ClntSocket(QObject):
         self.work_event.set()
         print("push back recved data into rx queue")
 
-    def ls_cmd_send(self, cid, path):
+    def hw_cmd_tree(self, cid, path):
         cmd_uuid = uuid.uuid1().__str__()
-        payload = {"uuid": cmd_uuid, "cmd": "ls", "path": path}
+        payload = {"uuid": cmd_uuid, "cmd": "tree", "path": path}
         payload = json.dumps(payload)
         payload_len = len(payload)
-        payload.encode("utf-8")
-        self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload, payload_len, cid)
+        payload = payload.encode("ascii")
+        self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload, payload_len, cid)
 
     def do_work(self):
-        # size data_type cid payload
-        #   0      1      2     3
-        while len(self.rx_queue) > 0:
+        # size | data_type | cid | payload
+        #   0  |     1     |  2  |    3
+        while True:
+            if len(self.rx_queue) == 0:
+                self.work_event.wait()
+                self.work_event.clear()
             data = self.rx_queue.pop(0)
             size = data[0]
             data_type = data[1]
@@ -125,13 +132,14 @@ class ClntSocket(QObject):
                 '''
                 {
                     "uuid": "2d2b708a-0081-11ea-a7b9-00a0c6000023",
-                    "cmd": "ls",
+                    "cmd": "tree",
                     "cid": 1,  # from client
-                    "root_path":"/"
-                    "list": [{"name": "Programs", "type": 0}, {"name": "cz-lora-daemon.tar", "type": 1}]
+                    "path":"/",
+                    "list": ["Programs", "cz-lora-daemon"]
                 }
                 '''
-                print("")
+                # parse
+                print("tree payload: ", payload)
             elif data_type == HW_DATA_TYPE_BINARY:
                 '''
                 {
@@ -165,21 +173,18 @@ reply:
     {"name":"toshiba","cid":3}
 ]
 
------------------------*ls*-----------------------
+-----------------------*tree*-----------------------
 request:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
-    "cmd":"ls",
+    "cmd":"tree",
     "path":"$hp/d/",
-    "page_size":100
 }
 reply:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
     "path":"$hp/d/",
     "list":[{"name":"Programs","type":0}, {"name":"cz-lora-daemon.tar","type":1}],
-    "page":1,
-    "total_page":3
 }
 
 -----------------------*cp*-----------------------
