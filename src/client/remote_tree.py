@@ -14,6 +14,7 @@ class RemoteTree(QObject):
         self.remote_model = QStandardItemModel()
         self.tv.header().hide()
         self.tv.setModel(self.remote_model)
+        self.clnt_list = list()
 
     def ui_event_handle(self, msg):
         print("get a signal: ", msg)
@@ -21,6 +22,8 @@ class RemoteTree(QObject):
             for i in msg[2]:
                 item = QStandardItem(i["name"])
                 self.remote_model.appendRow(item)
+                self.clnt_list.append(msg[2])
+                self.clnt_socket.ls_cmd_send(i["cid"], "/$" + i["name"] + "/")
 
         '''
         item1 = QStandardItem(CLNT_NAME)
@@ -28,5 +31,6 @@ class RemoteTree(QObject):
         recv_datas = ["root", "home", "tmp", "bin", "lib", "mnt"]
         for i in recv_datas:
             item1.appendRow(QStandardItem(i))
+        
         '''
 

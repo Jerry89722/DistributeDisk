@@ -23,8 +23,10 @@ class ClntSocket(QObject):
         self.t_sock = threading.Thread(target=self.start)
         self.t_sock.start()
         self.t_recv = None
+        self.t_work = None
         self.t_send = None
         self.tx_event = threading.Event()
+        self.work_event = threading.Event()
         self.tx_queue = list()
         self.sent_queue = list()
         self.rx_queue = list()
@@ -47,10 +49,16 @@ class ClntSocket(QObject):
 
         print("start recv and send thread")
         self.t_recv = threading.Thread(target=self.recv_work)
+        self.t_work = threading.Thread(target=self.do_work)
         self.t_send = threading.Thread(target=self.send_work, args=(self.tx_event,))
         self.t_recv.start()
         self.t_send.start()
-        self.push_cmd_tx_queue(HW_DATA_TYPE_LOGIN)
+        cmd_uuid = uuid.uuid1().__str__()
+        payload = {"uuid": cmd_uuid, "name": CLNT_NAME}
+        payload = json.dumps(payload)
+        payload_len = len(payload)
+        payload.encode("utf-8")
+        self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload, payload_len)
 
     def recv_work(self):
         print("recv work thread start")
@@ -63,19 +71,8 @@ class ClntSocket(QObject):
             size = header_tuple[0]
             data_type = header_tuple[1]
             cid = header_tuple[2]
-
             body = self.sock.recv(size)
-            body_tuple = struct.unpack('{}s'.format(size), body)
-            body_js = body_tuple[0].decode()
-
-            clnt_objs = json.loads(body_js)
-            for clnt in clnt_objs:
-                print("clnt details: ", clnt)
-
-            if data_type == HW_DATA_TYPE_LOGIN:
-                recved_data = [data_type, cid, clnt_objs]
-                # self.rx_queue.append(recved_data)
-                self.ui_event_trigger(recved_data)
+            self.push_back_rx_queue(size, data_type, cid, body)
 
     def send_work(self, event):
         print("send work thread start")
@@ -89,34 +86,64 @@ class ClntSocket(QObject):
             else:
                 event.clear()
 
-    def push_cmd_tx_queue(self, cmd):
-        if cmd == HW_DATA_TYPE_LOGIN:
-            cmd_uuid = uuid.uuid1().__str__()
-            clnt_info = {"uuid": cmd_uuid, "name": CLNT_NAME}
-            clnt_info_string = json.dumps(clnt_info)
-            bin_data = struct.pack('HHI{}s'.format(len(clnt_info_string)), len(clnt_info_string), cmd, CLNT_ID,
-                                   clnt_info_string.encode("ascii"))
-            print("push login info to tx queue")
-            self.tx_queue.append(bin_data)
-
-        print("trigger tx event")
+    def push_back_tx_queue(self, cmd, data, size, cid=CLNT_ID):
+        bin_data = struct.pack('HHI{}s'.format(size), size, cmd, cid, data)
+        self.tx_queue.append(bin_data)
         self.tx_event.set()
+        print("push back data into tx queue")
 
-    '''
-    payload_content = "ls $/"
-    payload_size = len(payload_content)
-    payload_type = 3
-    cid = 2
-    data = struct.pack('HHI{}s'.format(payload_size), payload_size, payload_type, cid, payload_content.encode("ascii"))
+    def push_back_rx_queue(self, size, data_type, cid, body):
+        self.rx_queue.append([size, data_type, cid, body])
+        self.work_event.set()
+        print("push back recved data into rx queue")
 
-    slen = s.send(data)
-    print("send cmd payload, len: ", slen)
+    def ls_cmd_send(self, cid, path):
+        cmd_uuid = uuid.uuid1().__str__()
+        payload = {"uuid": cmd_uuid, "cmd": "ls", "path": path}
+        payload = json.dumps(payload)
+        payload_len = len(payload)
+        payload.encode("utf-8")
+        self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload, payload_len, cid)
 
-    data = s.recv(4096)
+    def do_work(self):
+        # size data_type cid payload
+        #   0      1      2     3
+        while len(self.rx_queue) > 0:
+            data = self.rx_queue.pop(0)
+            size = data[0]
+            data_type = data[1]
+            cid = data[2]
+            payload = data[3]
+            if data_type == HW_DATA_TYPE_LOGIN:
+                body_tuple = struct.unpack('{}s'.format(size), payload)
+                body_js = body_tuple[0].decode()
+                clnt_objs = json.loads(body_js)
+                recved_data = [data_type, cid, clnt_objs]
+                self.ui_event_trigger(recved_data)
 
-    res = struct.unpack('HHI{}s'.format(len(data) - 8), data)
-
-    '''
+            elif data_type == HW_DATA_TYPE_CMD:
+                '''
+                {
+                    "uuid": "2d2b708a-0081-11ea-a7b9-00a0c6000023",
+                    "cmd": "ls",
+                    "cid": 1,  # from client
+                    "root_path":"/"
+                    "list": [{"name": "Programs", "type": 0}, {"name": "cz-lora-daemon.tar", "type": 1}]
+                }
+                '''
+                print("")
+            elif data_type == HW_DATA_TYPE_BINARY:
+                '''
+                {
+                    
+                    "uuid": "2d2b708a-0081-11ea-a7b9-00a0c6000023",
+                    "path":"/home/zjay/file.bin",
+                    "total":908647,
+                    "start":13456,
+                    "end":23456
+                }
+                '''
+                print("")
 
 
 '''
@@ -128,7 +155,7 @@ n bytes: cmd_json_string or binary_data
 -----------------------*login*-----------------------
 request:
 {
-    "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023"
+    "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
     "name":"dell"
 }
 
@@ -143,13 +170,36 @@ request:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
     "cmd":"ls",
-    "path":"$hp/d/"
+    "path":"$hp/d/",
+    "page_size":100
 }
 reply:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
-    "cmd":"ls",
-    "list":[{"name":"Programs","type":0}, {"name":"cz-lora-daemon.tar","type":1}]
+    "path":"$hp/d/",
+    "list":[{"name":"Programs","type":0}, {"name":"cz-lora-daemon.tar","type":1}],
+    "page":1,
+    "total_page":3
 }
 
+-----------------------*cp*-----------------------
+request:
+{
+    "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
+    "cmd":"cp",
+    "from_path":"$hp/d/",
+    "to_path":"/home/zjay/"
+}
+
+reply:
+{
+    "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
+    "cmd":"cp",
+    "from_path":"$hp/d/",
+    "to_path":"/home/zjay/",
+    "cur_file":"dir/file1.bin",
+    "start":0,
+    "offset":1024
+}
+bin_data
 '''
