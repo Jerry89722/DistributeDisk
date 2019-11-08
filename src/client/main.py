@@ -3,7 +3,7 @@ import struct
 import sys
 from builtins import len
 
-from PyQt5.QtCore import Qt, QModelIndex
+from PyQt5.QtCore import Qt, QModelIndex, QDir
 from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView, QMainWindow, \
     QFileSystemModel
 from client_ui import Ui_MainWindow

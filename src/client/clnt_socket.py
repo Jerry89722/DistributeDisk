@@ -5,7 +5,7 @@ import json
 import time
 import uuid
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QDir
 
 from settings import *
 
@@ -56,6 +56,7 @@ class ClntSocket(QObject):
         self.t_work.start()
         cmd_uuid = uuid.uuid1().__str__()
         payload = {"uuid": cmd_uuid, "name": CLNT_NAME}
+        self.sent_queue.append(payload)
         payload = json.dumps(payload)
         payload_len = len(payload)
         payload = payload.encode("ascii")
@@ -83,20 +84,20 @@ class ClntSocket(QObject):
             print("tx queue len: ", len(self.tx_queue))
             if len(self.tx_queue) > 0:
                 node = self.tx_queue.pop(0)
-                self.sent_queue.append(node)
                 s_len = self.sock.send(node)
                 print("send len: ", s_len)
             else:
                 event.clear()
 
     def push_back_tx_queue(self, cmd, data, size, cid=CLNT_ID):
-        # print("size: %d, cmd: %d, cid: %d, data: %s" % (size, cmd, cid, data.decode()))
+        print("[tx] size: %d, cmd: %d, cid: %d, data: %s" % (size, cmd, cid, data.decode()))
         bin_data = struct.pack('HHI{}s'.format(size), size, cmd, cid, data)
         self.tx_queue.append(bin_data)
         self.tx_event.set()
         print("push back data into tx queue")
 
     def push_back_rx_queue(self, size, data_type, cid, body):
+        print("[rx] size: %d, cmd: %d, cid: %d, data: %s" % (size, data_type, cid, body.decode()))
         self.rx_queue.append([size, data_type, cid, body])
         self.work_event.set()
         print("push back recved data into rx queue")
@@ -104,6 +105,7 @@ class ClntSocket(QObject):
     def hw_cmd_tree(self, cid, path):
         cmd_uuid = uuid.uuid1().__str__()
         payload = {"uuid": cmd_uuid, "cmd": "tree", "path": path}
+        self.sent_queue.append(payload)
         payload = json.dumps(payload)
         payload_len = len(payload)
         payload = payload.encode("ascii")
@@ -130,20 +132,44 @@ class ClntSocket(QObject):
 
             elif data_type == HW_DATA_TYPE_CMD:
                 '''
-                {
-                    "uuid": "2d2b708a-0081-11ea-a7b9-00a0c6000023",
-                    "cmd": "tree",
-                    "cid": 1,  # from client
-                    "path":"/",
-                    "list": ["Programs", "cz-lora-daemon"]
-                }
+                {"uuid": "90d01f5e-01e2-11ea-8283-cc2f713e4a76", "cmd": "tree", "path": "C:/"}
+                {"uuid": "90d01f5e-01e2-11ea-8283-cc2f713e4a76", "list": ["C:/", "D:/"]}
                 '''
                 # parse
                 print("tree payload: ", payload)
+                body_tuple = struct.unpack('{}s'.format(size), payload)
+                body_js = body_tuple[0].decode()
+                clnt_objs = json.loads(body_js)
+                reply_js = ""
+                cmd = clnt_objs.get("cmd")
+                if cmd is None:
+                    print("is cmd reply")
+                    for act in self.sent_queue:
+                        if clnt_objs["uuid"] == act["uuid"]:
+                            recved_data = [data_type, cid, act["cmd"], act["path"], clnt_objs["list"]]
+                            self.ui_event_trigger(recved_data)
+                            break
+                else:
+                    if cmd == "tree":
+                        dirs = list()
+                        if clnt_objs["path"] == "/" and SYS_TYPE is "windows":
+                            dirs = QDir.drives()
+                        else:
+                            dirs = QDir(clnt_objs["path"]).entryInfoList(filters=QDir.Dirs)
+
+                        reply_payload = {"uuid": clnt_objs["uuid"], "list": []}
+                        for d in dirs:
+                            print("d: ", d.filePath())
+                            reply_payload["list"].append(d.fileName())
+                        reply_js = json.dumps(reply_payload)
+
+                print(reply_js)
+
+                self.push_back_tx_queue(HW_DATA_TYPE_CMD, reply_js.encode("ascii"), len(reply_js), cid)
+
             elif data_type == HW_DATA_TYPE_BINARY:
                 '''
                 {
-                    
                     "uuid": "2d2b708a-0081-11ea-a7b9-00a0c6000023",
                     "path":"/home/zjay/file.bin",
                     "total":908647,
@@ -178,13 +204,13 @@ request:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
     "cmd":"tree",
-    "path":"$hp/d/",
+    "path":"/",
 }
 reply:
 {
     "uuid":"2d2b708a-0081-11ea-a7b9-00a0c6000023",
-    "path":"$hp/d/",
-    "list":[{"name":"Programs","type":0}, {"name":"cz-lora-daemon.tar","type":1}],
+    "path":"/",
+    "list":["C:/", "D:/"]
 }
 
 -----------------------*cp*-----------------------
@@ -208,3 +234,4 @@ reply:
 }
 bin_data
 '''
+
