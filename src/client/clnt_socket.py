@@ -56,7 +56,6 @@ class ClntSocket(QObject):
         self.t_work.start()
         cmd_uuid = uuid.uuid1().__str__()
         payload = {"uuid": cmd_uuid, "name": CLNT_NAME}
-        self.sent_queue.append(payload)
         payload = json.dumps(payload)
         payload_len = len(payload)
         payload = payload.encode("ascii")
@@ -151,21 +150,25 @@ class ClntSocket(QObject):
                             break
                 else:
                     if cmd == "tree":
+                        reply_payload = {"uuid": clnt_objs["uuid"], "list": []}
                         dirs = list()
                         if clnt_objs["path"] == "/" and SYS_TYPE is "windows":
                             dirs = QDir.drives()
+                            for d in dirs:
+                                print("drivers: ", d.filePath().strip('/'))
+                                reply_payload["list"].append(d.filePath().strip('/'))
                         else:
                             dirs = QDir(clnt_objs["path"]).entryInfoList(filters=QDir.Dirs)
+                            for d in dirs:
+                                if d.fileName() == "." or d.fileName() == "..":
+                                    continue
+                                print("full path: %s, file name: %s" % (d.filePath(), d.fileName()))
+                                reply_payload["list"].append(d.fileName())
 
-                        reply_payload = {"uuid": clnt_objs["uuid"], "list": []}
-                        for d in dirs:
-                            print("d: ", d.filePath())
-                            reply_payload["list"].append(d.fileName())
                         reply_js = json.dumps(reply_payload)
 
-                print(reply_js)
-
-                self.push_back_tx_queue(HW_DATA_TYPE_CMD, reply_js.encode("ascii"), len(reply_js), cid)
+                    print(reply_js)
+                    self.push_back_tx_queue(HW_DATA_TYPE_CMD, reply_js.encode("ascii"), len(reply_js), cid)
 
             elif data_type == HW_DATA_TYPE_BINARY:
                 '''
