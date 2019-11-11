@@ -1,11 +1,6 @@
-import socket
-import struct
 import sys
-from builtins import len
 
-from PyQt5.QtCore import Qt, QModelIndex, QDir
-from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView, QMainWindow, \
-    QFileSystemModel
+from PyQt5.QtWidgets import QApplication, QMainWindow
 from client_ui import Ui_MainWindow
 from local_tree import LocalTree
 from remote_tree import RemoteTree

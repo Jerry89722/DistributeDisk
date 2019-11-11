@@ -18,6 +18,7 @@ class ClntSocket(QObject):
 
     def __init__(self):
         super(ClntSocket, self).__init__()
+        # self.setParent(parent)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.t_sock = threading.Thread(target=self.start)
         self.t_sock.start()
@@ -29,6 +30,9 @@ class ClntSocket(QObject):
         self.tx_queue = list()
         self.sent_queue = list()
         self.rx_queue = list()
+
+    def __del__(self):
+        print("delete itself")
 
     def ui_event_trigger(self, ui_data):
         self.send_msg.emit(ui_data)
@@ -53,13 +57,11 @@ class ClntSocket(QObject):
         self.t_recv.start()
         self.t_send.start()
         self.t_work.start()
-        cmd_uuid = uuid.uuid1().__str__()
         payload = copy.deepcopy(payload_login)
         payload["uuid"] = uuid.uuid1().__str__()
         payload = json.dumps(payload)
-        payload_len = len(payload)
-        payload = payload.encode("ascii")
-        self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload, payload_len)
+        print("send cmd login: size: %d, data_type: %d, cid: %d, payload: %s" % (len(payload), HW_DATA_TYPE_LOGIN, CLNT_ID, payload))
+        self.push_back_tx_queue(HW_DATA_TYPE_LOGIN, payload.encode("ascii"), len(payload))
 
     def recv_work(self):
         print("recv work thread start")
@@ -109,10 +111,8 @@ class ClntSocket(QObject):
         payload["path"] = path
         self.sent_queue.append(payload)
         payload = json.dumps(payload)
-        payload_len = len(payload)
-        payload = payload.encode("ascii")
-        print("size: %d, data_type: %d, cid: %d, payload: %s" % (payload_len, HW_DATA_TYPE_CMD, cid, payload))
-        self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload, payload_len, cid)
+        print("send cmd tree request: size: %d, data_type: %d, cid: %d, payload: %s" % (len(payload), HW_DATA_TYPE_CMD, cid, payload))
+        self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload.encode("ascii"), len(payload), cid)
 
     def do_work(self):
         # size | data_type | cid | payload
@@ -164,7 +164,7 @@ class ClntSocket(QObject):
                                 continue
                             payload_reply["list"].append(d.fileName())
                     reply_js = json.dumps(payload_reply)
-                    print("reply payload: ", reply_js)
+                    print("send cmd reply: size: %d, data_type: %d, cid: %d, payload: %s" % (len(reply_js), HW_DATA_TYPE_CMD, CLNT_ID, reply_js))
                     self.push_back_tx_queue(HW_DATA_TYPE_CMD, reply_js.encode("ascii"), len(reply_js), cid)
             elif data_type == HW_DATA_TYPE_BINARY:
                 '''
