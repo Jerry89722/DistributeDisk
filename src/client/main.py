@@ -1,11 +1,6 @@
-import socket
-import struct
 import sys
-from builtins import len
 
-from PyQt5.QtCore import Qt, QModelIndex
-from PyQt5.QtWidgets import QApplication, QWidget, QTreeView, QAbstractItemView, QHeaderView, QMainWindow, \
-    QFileSystemModel
+from PyQt5.QtWidgets import QApplication, QMainWindow
 from client_ui import Ui_MainWindow
 from local_tree import LocalTree
 from remote_tree import RemoteTree
@@ -20,6 +15,7 @@ class MainWindow(QMainWindow):
         self.clnt_socket = ClntSocket()
         self.local_tree = LocalTree(self.ui.localFileTv)
         self.remote_tree = RemoteTree(self.ui.remoteFileTv, self.clnt_socket)
+        self.clnt_socket.send_msg.connect(self.remote_tree.ui_event_handle)
 
 
 if __name__ == "__main__":
