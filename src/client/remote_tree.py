@@ -1,4 +1,6 @@
-from PyQt5.QtCore import QModelIndex, QObject, pyqtSignal
+import time
+
+from PyQt5.QtCore import QModelIndex, QObject, pyqtSignal, Qt
 from PyQt5.QtWidgets import QTreeView
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
@@ -22,40 +24,58 @@ class RemoteTree(QObject):
         self.remote_model.appendRow(item1)
         item2 = QStandardItem("aaaa")
         item1.appendRow(item2)
-
         item3 = QStandardItem("BBBB")
         self.remote_model.appendRow(item3)
-        # item9 = QStandardItem("MMMM")
-        # self.remote_model.appendRow(item9)
+        item9 = QStandardItem("MMMM")
+        self.remote_model.appendRow(item9)
         item4 = QStandardItem("bbbb1")
         item3.appendRow(item4)
         item5 = QStandardItem("bbbb2")
         item3.appendRow(item5)
-        # item6 = QStandardItem("bbbb3")
-        # item3.appendRow(item6)
+        item6 = QStandardItem("bbbb3")
+        item3.appendRow(item6)
         print("aaaa: ", item3.rowCount())
+        print("aa", len(self.remote_model.findItems("", flags=Qt.MatchContains)))
         '''
 
     def ui_event_handle(self, msg):
         print("get a signal: ", msg)
         if msg[0] == HW_DATA_TYPE_LOGIN:
+            name_list = list()
             for i in msg[2]:
-                item = QStandardItem(i["name"])
-                self.remote_model.appendRow(item)
+                name_list.append(i["name"])
                 self.clnt_list.append(i)
+                self.remote_model.appendRow(QStandardItem(i["name"]))
                 self.clnt_socket.hw_cmd_tree(i["cid"], "/")
 
         if msg[0] == HW_DATA_TYPE_CMD:
             if msg[2] == "tree":
                 # recved_data = [data_type, cid, act["cmd"], act["path"], act["list"]]
                 item = self.remote_model.findItems(self.get_name_by_cid(msg[1]))[0]
+                print("dest device item: ", item.text())  # dell
                 if msg[3] == "/":
                     for m in msg[4]:
                         item.appendRow(QStandardItem(m))
                 else:
                     tail_item = self.get_item_by_path(msg[3], item)
-                    for m in msg[4]:
-                        tail_item.appendRow(QStandardItem(m))
+                    print("tail item: ", tail_item.text())
+                    self.children_item_update(tail_item, msg[4])
+
+    @staticmethod
+    def children_item_update(item, name_list):
+        print("item name: ")
+        row_cnt = item.rowCount()
+        print("row cnt: ", row_cnt)
+        children = list()
+        for i in range(row_cnt):
+            print(item.child(i).text())
+            children.append(item.child(i).text())
+        for name in name_list:
+            if name not in children:
+                item.appendRow(QStandardItem(name))
+        for name in children:
+            if name not in name_list:
+                item.takeChild(item.child(children.index(name)))
 
     def get_item_by_path(self, path: str, item: QStandardItem):
         item_name_list = path.strip('/').split('/')
@@ -107,7 +127,6 @@ class RemoteTree(QObject):
         for ic in range(item.rowCount()):
             print(item.child(ic).text())
             full_path = self.get_full_path(item.child(ic))
-            print("tree get, full path: ", full_path)
             path_info = full_path.split('/', 2)
             print("clnt: %s, path: %s" % (path_info[-2], path_info[-1]))
             self.clnt_socket.hw_cmd_tree(self.get_cid_by_name(path_info[-2]), path_info[-1])
