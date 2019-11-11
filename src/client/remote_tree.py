@@ -42,11 +42,14 @@ class RemoteTree(QObject):
         print("get a signal: ", msg)
         if msg[0] == HW_DATA_TYPE_LOGIN:
             name_list = list()
+            cid_list = list()
             for i in msg[2]:
                 name_list.append(i["name"])
+                cid_list.append(i["cid"])
                 self.clnt_list.append(i)
-                self.remote_model.appendRow(QStandardItem(i["name"]))
-                self.clnt_socket.hw_cmd_tree(i["cid"], "/")
+            self.children_item_update(self.remote_model, name_list)
+            for cid in cid_list:
+                self.clnt_socket.hw_cmd_tree(cid, "/")
 
         if msg[0] == HW_DATA_TYPE_CMD:
             if msg[2] == "tree":
@@ -63,13 +66,22 @@ class RemoteTree(QObject):
 
     @staticmethod
     def children_item_update(item, name_list):
-        print("item name: ")
-        row_cnt = item.rowCount()
-        print("row cnt: ", row_cnt)
+        print("item type: ", type(item))
+        item_type = type(item)
+
+        children_item = list()
+        if item_type == QStandardItemModel:
+            children_item = item.findItems("", Qt.MatchContains)
+        else:
+            row_cnt = item.rowCount()
+            for i in range(row_cnt):
+                children_item.append(item.child(i))
+
         children = list()
-        for i in range(row_cnt):
-            print(item.child(i).text())
-            children.append(item.child(i).text())
+        for child in children_item:
+            print("child: ", item_type, child.text())
+            children.append(child.text())
+
         for name in name_list:
             if name not in children:
                 item.appendRow(QStandardItem(name))
