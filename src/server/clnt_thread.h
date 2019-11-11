@@ -18,10 +18,10 @@ using namespace std;
 #define HW_RECVED_EVENT		0
 #define HW_SEND_EVENT		1
 
-#define HW_BODY_BUF_MAX_LEN		1024
+#define HW_BODY_BUF_MAX_LEN		(32 * 1024)
 
 #define HW_HEADER_LEN			8
-#define HW_SEND_BUF_LEN			4*1024
+#define HW_SEND_BUF_LEN			(32 * 1024)
 
 #define HW_TINIEST_BUF_LEN			32
 #define HW_TINY_BUF_LEN			64
@@ -100,7 +100,7 @@ private:
 	uint8_t m_hbuf[HW_HEADER_LEN];
 	uint8_t* m_sbuf;
 	int m_fd;
-	pthread_t m_tid;
+	pthread_t m_work_tid;
 	pthread_t m_request_tid;
 	
 	ev::dynamic_loop m_loop;

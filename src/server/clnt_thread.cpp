@@ -13,10 +13,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "cJSON.h"
 
 #include "clnt_thread.h"
+
+#define COUT cout<<m_name<<":"
 
 using namespace std;
 
@@ -30,7 +33,7 @@ Payload::Payload(ClntThread& clnt_from, int size)
 }
 
 Payload::Payload(const Payload& payload)
-:m_pclnt_from(payload.m_pclnt_from), m_offset(payload.m_offset), m_tlen(payload.m_offset)
+:m_pclnt_from(payload.m_pclnt_from), m_type(payload.m_type), m_offset(payload.m_offset), m_tlen(payload.m_offset)
 {
 	m_buf = new uint8_t[m_tlen];
 
@@ -62,30 +65,56 @@ ClntThread::ClntThread(int fd)
 	m_timer_watcher.set(m_loop);
 	m_timer_watcher.set<ClntThread, &ClntThread::timer_handle>(this);
 	m_timer_watcher.start();
+
+	sm_clnt_list.remove(this);
 }
 
 ClntThread::~ClntThread()
 {
-	m_timer_watcher.stop();
+	COUT << "client close, pid: " << pthread_self() << endl;
+	if(m_timer_watcher.is_active()){
 	
-	m_req_watcher.stop();
+		m_timer_watcher.stop();
+	}
 	
-	m_req_watcher.stop();
+	if(m_req_watcher.is_active()){
+		
+		m_req_watcher.stop();
+	}
+
+	if(m_recv_watcher.is_active()){
+		
+		m_recv_watcher.stop();
+	}
 	
-	m_recv_watcher.stop();
 	
 	m_loop.break_loop();
 	
 	close(m_fd);
+
+	sm_clnt_list.remove(this);
 	
-	pthread_cancel(m_request_tid);
 	
-	pthread_cancel(m_tid);
+	delete m_sbuf;
+	
+	pthread_t tid;
+
+	if(pthread_self() != m_request_tid){
+	
+		tid = m_request_tid;
+	}else{
+
+		tid = m_work_tid;
+	}
+
+	pthread_cancel(tid);
+	
+	pthread_exit(NULL);
 }
 
 void ClntThread::start(void)
 {
-	pthread_create(&m_tid, NULL, work_thread, this);
+	pthread_create(&m_work_tid, NULL, work_thread, this);
 
 	/* use to handle clnt request, create here and not exit util clnt close, 
 	 * in case create this thread frequently */
@@ -103,19 +132,18 @@ void* ClntThread::work_thread(void* arg)
 
 void ClntThread::work_start(void)
 {
-	cout << "a client connection founded" << endl;
+	COUT << "client work start, work thread tid: " << m_work_tid << endl;
 	
-	while(1){
-		m_loop.run(0);
-		cout << "loop done" << endl;
-	}
+	m_loop.run(0);
+
+	COUT << "loop done" << endl;
 }
 
 int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 {
 	if(r_payload.m_offset < 1){
 
-		cout << "clnt info verify failed, recved payload size abnormal" << endl;
+		COUT << "clnt info verify failed, recved payload size abnormal" << endl;
 
 		return -1;
 	}
@@ -124,51 +152,71 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 
 	m_name = string((char*)(r_payload.m_buf), r_payload.m_offset);
 
+	r_payload.m_buf[r_payload.m_offset + 1] = 0;
+
+	cJSON* root = cJSON_Parse((char*)r_payload.m_buf);
+
+	cJSON* node = cJSON_GetObjectItem(root, "uuid");
+	string uuid = string(node->valuestring);
+	
+	node = cJSON_GetObjectItem(root, "name");
+	m_name = string(node->valuestring);
+
+	cJSON_Delete(root);
+
 	sm_clnt_list.push_back(this);
 
 	list<ClntThread*>::iterator it;
 
 	Payload pld = Payload(*this, HW_NORMAL_BUF_LEN);
-
-	cJSON* root = cJSON_CreateArray();
+	pld.m_type = _HW_DATA_TYPE_LOGIN;
 
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+		
+		list<ClntThread*>::iterator it_sub;
+		
+		root = cJSON_CreateArray();
 
-		if((*it)->m_cid != cid){
+		for(it_sub = sm_clnt_list.begin(); it_sub != sm_clnt_list.end(); ++it_sub){
+			if(it == it_sub){
 
+				continue;
+			}
+			
 			cJSON* clnt_node = cJSON_CreateObject();
 
-			cJSON_AddStringToObject(clnt_node, "name", (*it)->m_name.c_str());
+			cJSON_AddStringToObject(clnt_node, "name", (*it_sub)->m_name.c_str());
 
-			cJSON_AddNumberToObject(clnt_node, "cid", (*it)->m_cid);
+			cJSON_AddNumberToObject(clnt_node, "cid", (*it_sub)->m_cid);
 
 			cJSON_AddItemToArray(root, clnt_node);
+
 		}
-	}
-
-	if(cJSON_GetArraySize(root) > 0){
-
-		char* s = cJSON_PrintUnformatted(root);
-
-		memcpy(pld.m_buf, s, strlen(s));
-
-		pld.m_offset = strlen(s);
-
-		cout << "clnts info: " << s << endl;
-
-		free(s);
-	}
-
-	cJSON_Delete(root);
 
 
-	if(strlen((char*)pld.m_buf) > 0){
+		if(cJSON_GetArraySize(root) > 0){
 
-		cout << (char*)pld.m_buf << endl;
+			char* s = cJSON_PrintUnformatted(root);
 
-		m_deque_cmds.push_back(pld);
+			memcpy(pld.m_buf, s, strlen(s) + 1);
 
-		notify_it(HW_RECVED_EVENT);
+			pld.m_offset = strlen(s);
+
+			COUT << "clnts info: " << s << endl;
+
+			free(s);
+		}
+
+		cJSON_Delete(root);
+
+		if(strlen((char*)pld.m_buf) > 0){
+
+			COUT << (char*)pld.m_buf << endl;
+
+			(*it)->m_deque_cmds.push_back(pld);
+
+			(*it)->notify_it(HW_RECVED_EVENT);
+		}
 	}
 
 	return 0;
@@ -240,20 +288,21 @@ int ClntThread::stream_recv(int fd, uint8_t* buf, int len, int retry_times)
 	for(i = 0; i < n; ++i){
 		
 		ret = recv(fd, buf + t_len, len - t_len, 0);
+
+		cout << "recv ret: " << ret << ", errno: " << errno << endl;
 		
-		if(ret == 0){
-			// connection is closed
+		if(ret <= 0){
+			// catch an error when recv
 			
+			cout << "recv failed because of local error: " << strerror(errno) << endl;
+			if(errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN){
+
+				continue;
+			}
+
 			cout << "connection closed" << endl;
 			
 			return 0;
-
-		}else if(ret < 0){
-			// local error cause recv failed
-			
-			cout << "recv failed because of local error" << endl;
-
-			return -1;
 
 		}else if(ret <= len){
 			
@@ -294,45 +343,49 @@ int ClntThread::stream_recv(int fd, uint8_t* buf, int len, int retry_times)
  * */
 void ClntThread::recv_handle(ev::io& watcher, int event)
 {
-	cout << "recv handler enter" << endl;
+	COUT << "recv handler enter" << endl;
 
 	bzero(m_hbuf, HW_HEADER_LEN);
 
 	int len = stream_recv(m_fd, m_hbuf, HW_HEADER_LEN, 0);
 	if(len == 0){
 		
-		cout << "connection closed when recving header" << endl;
+		COUT << "connection closed when recving header" << endl;
 
 		delete this;
 		
 		return ;
 	}else if(len < 0){
 
-		cout << "recv failed, local error happend when recving header" << endl;
+		COUT << "recv failed, local error happend when recving header" << endl;
 
 		return ;
 	}else if(len < HW_HEADER_LEN){
 
-		cout << "header data recv overtime" << endl;
+		COUT << "header data recv overtime" << endl;
 		
 		return ;
 	}else{
 		
-		cout << "header recv done: " << len << endl;
+		COUT << "header recv done: " << len << endl;
 	}
 
 	int size = *((uint16_t*)m_hbuf);
 	int type = *((uint16_t*)(m_hbuf+2));
 	int cid = *((uint16_t*)(m_hbuf+4));
 	
-	cout << "size: " << size << endl;
-	cout << "type: " << type << endl;
-	cout << "cid: " << cid << endl;
+	COUT << "size: " << size << endl;
+	COUT << "type: " << type << endl;
+	COUT << "cid: " << cid << endl;
+	if(size <= 0){
+
+		return ;
+	}
 	m_payload_request.m_type = type;
 
 	if(size > m_payload_request.m_tlen){
 
-		cout << "payload data too long" << endl;
+		COUT << "payload data too long, size: " << size << ", len:" << m_payload_request.m_tlen << endl;
 		
 		return ;
 	}
@@ -343,22 +396,24 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	len = stream_recv(m_fd, m_payload_request.m_buf, size, 0);
 	if(len == 0){
 		
-		cout << "connection closed when recving body" << endl;
-		
+		COUT << "connection closed when recving body" << endl;
+
+		delete this;
+
 		return ;
 	}else if(len < 0){
 
-		cout << "recv failed, local error happend when recving body" << endl;
+		COUT << "recv failed, local error happend when recving body" << endl;
 
 		return ;
 	}else if(len < size){
 
-		cout << "body data recv overtime, recved len: " << len << endl;
+		COUT << "body data recv overtime, recved len: " << len << endl;
 		
 		return ;
 	}else{
 		
-		cout << "body recved, content: " << m_payload_request.m_buf << endl;
+		COUT << "body recved, content: " << m_payload_request.m_buf << endl;
 		
 		m_payload_request.m_offset = len;
 	}
@@ -389,7 +444,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 void ClntThread::notify_it(int which)
 {
 	if(which == HW_RECVED_EVENT){
-
+		COUT << "notify clnt:" << m_name << endl;
 		m_req_watcher.send();
 	}
 }
@@ -398,11 +453,11 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
 {
 	list<ClntThread*>::iterator it;
 	
-	cout << "request cid: " << cid << endl;
+	COUT << "request cid: " << cid << endl;
 
 	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
 		
-		cout << "traverse cid: " << (*it)->m_cid << endl;
+		COUT << "traverse cid: " << (*it)->m_cid << endl;
 
 		if((*it)->m_cid == cid){
 
@@ -410,7 +465,9 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
 
 			(*it)->m_deque_cmds.push_back(pld);
 			
-			(*it)->notify_it(HW_RECVED_EVENT);  // will change to dest client thread
+			COUT << "switch thread, [" << m_name << "] -> [" << (*it)->m_name << "]" << endl;
+
+			(*it)->notify_it(HW_RECVED_EVENT);  // will switch to dest client thread
 														  //
 			break;										//
 		}											  //
@@ -424,11 +481,11 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
  * */
 void ClntThread::request_event_handle(ev::async& watcher, int event)
 {
-	cout << "event handle" << endl;
+	COUT << "event handle" << endl;
 
 	if(&watcher == &m_req_watcher){
 		
-		cout << "request event handle, to id: " << m_request_tid << endl;
+		COUT << "request event handle, to id: " << m_request_tid << endl;
 
 		pthread_kill(m_request_tid, SIGALRM);
 	}
@@ -451,21 +508,30 @@ void ClntThread::request_thread(void)
 
 	while(1){
 		
-		cout << "thread work start waiting ..., tid: " << m_request_tid << endl;
+		COUT << m_name << ": request handle thread work waiting ..., tid: " << m_request_tid << endl;
+		if(!m_deque_cmds.size()){
 
-		pause();
+			pause();
+		}
 
-		cout << "request handle work start" << endl;
+		COUT << "request handle work start" << endl;
 
 		Payload req_pld = m_deque_cmds[0];
 		
 		m_deque_cmds.pop_front();
 
-		cout << "cid_from: " << req_pld.m_pclnt_from->m_cid << endl;
+		COUT << "send msg to ["<< m_name << "], msg is from client: " << req_pld.m_pclnt_from->m_cid << endl;
 
 		ret = pack(req_pld);
 
 		ret = stream_send(m_fd, m_sbuf, 8 + req_pld.m_offset, 0);
+		
+		if(ret == 0){
+
+			delete this;
+
+			return ;
+		}
 
 	}
 }
@@ -473,7 +539,8 @@ void ClntThread::request_thread(void)
 
 void ClntThread::timer_handle(ev::timer& watcher, int event)
 {
-	cout << "timer handle" << endl;
+
+	COUT << "timer handle" << endl;
 }
 
 int ClntThread::pack(Payload& payload)
@@ -489,6 +556,13 @@ int ClntThread::pack(Payload& payload)
 	p += 4;
 
 	memcpy(p, payload.m_buf, payload.m_offset);
+	p += payload.m_offset;
+	*p = 0;
+
+	COUT << "size:" << *(uint16_t*)m_sbuf << endl;
+	COUT << "type:" << *(uint16_t*)(&m_sbuf[2]) << endl;
+	COUT << "cid:" << *(uint32_t*)(&m_sbuf[4]) << endl;
+	COUT << "payload:" << (char*)(&m_sbuf[8]) << endl;
 
 	return 0;
 }
