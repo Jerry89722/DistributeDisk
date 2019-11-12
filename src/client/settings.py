@@ -1,5 +1,5 @@
-CLNT_NAME = "dell"
-CLNT_ID = 2
+CLNT_NAME = "hp"
+CLNT_ID = 1
 HW_HOST = "www.huiwanit.cn"
 HW_PORT = 9001
 
@@ -7,17 +7,24 @@ HW_DATA_TYPE_LOGIN = 0
 HW_DATA_TYPE_HEARTBEAT = 1
 HW_DATA_TYPE_ACK = 2
 HW_DATA_TYPE_CMD = 3
-HW_DATA_TYPE_BINARY = 3
+HW_DATA_TYPE_BINARY = 4
 
 SYS_TYPE = "windows"
+
+HW_FILE_TYPE_NONE = 0
+HW_FILE_TYPE_FILE = 1
+HW_FILE_TYPE_DIR = 2
+HW_FILE_TYPE_SYMLINK = 3
 
 payload_login = {"uuid": None, "name": CLNT_NAME}
 # [{"name": "hp", "cid":1}, {"name":"dell", "cid":2}]
 
 payload_tree = {"uuid": None, "cmd": "tree", "path": None}
-payload_tree_reply = {"uuid": None, "list": []}
+payload_list_reply = {"uuid": None, "list": []}
+# tree list ["name1", "name2", "namex"]
+# ls list [{"name":"name1", "type":HW_FILE_TYPE_FILE}]
 
-payload_ls = {"uuid": None, "cmd": "ls", "path": None}
+payload_list = {"uuid": None, "cmd": "list", "path": None}
 
 '''
 protocol:

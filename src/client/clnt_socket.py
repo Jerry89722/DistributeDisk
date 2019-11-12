@@ -14,7 +14,8 @@ HW_SOCK_HEADER_LEN = 8
 
 
 class ClntSocket(QObject):
-    send_msg = pyqtSignal(object)
+    send_tv_msg = pyqtSignal(object)
+    send_lv_msg = pyqtSignal(object)
 
     def __init__(self):
         super(ClntSocket, self).__init__()
@@ -34,8 +35,11 @@ class ClntSocket(QObject):
     def __del__(self):
         print("delete itself")
 
-    def ui_event_trigger(self, ui_data):
-        self.send_msg.emit(ui_data)
+    def ui_event_trigger(self, who, ui_data):
+        if who is "tv":
+            self.send_tv_msg.emit(ui_data)
+        else:
+            self.send_lv_msg.emit(ui_data)
 
     def start(self):
         try:
@@ -105,13 +109,15 @@ class ClntSocket(QObject):
         self.rx_queue.append([size, data_type, cid, body])
         self.work_event.set()
 
-    def hw_cmd_tree(self, cid, path):
-        payload = copy.deepcopy(payload_tree)
+    def hw_cmd_list(self, cmd, cid, path):
+        payload = copy.deepcopy(payload_list)
         payload["uuid"] = uuid.uuid1().__str__()
+        payload["cmd"] = cmd
         payload["path"] = path
         self.sent_queue.append(payload)
         payload = json.dumps(payload)
-        print("send cmd tree request: size: %d, data_type: %d, cid: %d, payload: %s" % (len(payload), HW_DATA_TYPE_CMD, cid, payload))
+        print("send cmd list request: size: %d, data_type: %d, cid: %d, payload: %s" % (
+            len(payload), HW_DATA_TYPE_CMD, cid, payload))
         self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload.encode("ascii"), len(payload), cid)
 
     def do_work(self):
@@ -134,38 +140,32 @@ class ClntSocket(QObject):
                 body_js = payload_tuple[0].decode()
                 payload_dict = json.loads(body_js)
                 recved_data = [data_type, cid, payload_dict]
-                self.ui_event_trigger(recved_data)
+                self.ui_event_trigger("tv", recved_data)
             elif data_type == HW_DATA_TYPE_CMD:
                 payload_js_str = struct.unpack('{}s'.format(size), payload)[0].decode()
                 payload_dict = json.loads(payload_js_str)
-                reply_js = ""
                 cmd = payload_dict.get("cmd")
                 if cmd is None:
                     print("cmd reply handle, uuid: ", payload_dict["uuid"])
                     for request in self.sent_queue:
                         if payload_dict["uuid"] == request["uuid"]:
                             recved_data = [data_type, cid, request["cmd"], request["path"], payload_dict["list"]]
-                            self.ui_event_trigger(recved_data)
+                            if request["cmd"] == "tree":
+                                self.ui_event_trigger("tv", recved_data)
+                            else:
+                                self.ui_event_trigger("lv", recved_data)
                             break
-                elif cmd == "tree":
-                    print("paylaod_tree reply: ", payload_tree_reply)
-                    payload_reply = copy.deepcopy(payload_tree_reply)
+                elif cmd == "tree" or cmd == "ls":
+                    print("paylaod_tree reply: ", payload_list_reply)
+                    payload_reply = copy.deepcopy(payload_list_reply)
                     payload_reply["uuid"] = payload_dict["uuid"]
-                    if payload_dict["path"] == "/" and SYS_TYPE is "windows":
-                        print("drivers: list: ", payload_reply)
-                        dirs = QDir.drives()
-                        for d in dirs:
-                            payload_reply["list"].append(d.filePath().strip('/'))
-                    else:
-                        print("directory: list: ", payload_reply)
-                        dirs = QDir(payload_dict["path"]).entryInfoList(filters=QDir.Dirs)
-                        for d in dirs:
-                            if d.fileName() == "." or d.fileName() == "..":
-                                continue
-                            payload_reply["list"].append(d.fileName())
+                    payload_reply["list"] = self.file_list_get(cmd, payload_dict["path"])
                     reply_js = json.dumps(payload_reply)
-                    print("send cmd reply: size: %d, data_type: %d, cid: %d, payload: %s" % (len(reply_js), HW_DATA_TYPE_CMD, CLNT_ID, reply_js))
+                    print("send cmd reply: size: %d, data_type: %d, cid: %d, payload: %s" % (
+                        len(reply_js), HW_DATA_TYPE_CMD, CLNT_ID, reply_js))
                     self.push_back_tx_queue(HW_DATA_TYPE_CMD, reply_js.encode("ascii"), len(reply_js), cid)
+                else:
+                    print("unknow cmd: ", cmd)
             elif data_type == HW_DATA_TYPE_BINARY:
                 '''
                 {
@@ -176,3 +176,37 @@ class ClntSocket(QObject):
                 }
                 '''
                 print("")
+
+    @staticmethod
+    def file_list_get(cmd, path):
+        file_list = list()
+        if cmd == "tree":
+            if path == "/" and SYS_TYPE is "windows":
+                dirs = QDir.drives()
+                for d in dirs:
+                    file_list.append(d.filePath().strip('/'))
+            else:
+                dirs = QDir(path).entryInfoList(filters=QDir.Dirs | QDir.NoDotAndDotDot)
+                for d in dirs:
+                    file_list.append(d.fileName())
+        elif cmd == "ls":
+            print(path)
+            if path == "/" and SYS_TYPE is "windows":
+                dirs = QDir.drives()
+                for d in dirs:
+                    file_list.append({"name": d.filePath().strip('/'), "type": QDir.Dirs, "size": 0})
+            else:
+                dirs = QDir(path).entryInfoList(filters=QDir.AllEntries | QDir.NoDotAndDotDot)
+                for d in dirs:
+                    file_type = HW_FILE_TYPE_NONE
+                    size = 0
+                    if d.isDir():
+                        file_type = HW_FILE_TYPE_DIR
+                    elif d.isFile():
+                        file_type = HW_FILE_TYPE_FILE
+                        size = d.size()
+                    elif d.isSymLink():
+                        file_type = HW_FILE_TYPE_SYMLINK
+                    file_list.append({"name": d.fileName(), "type": file_type, "size": size})
+                    print(file_list)
+        return file_list

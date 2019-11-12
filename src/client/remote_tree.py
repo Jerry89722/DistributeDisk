@@ -13,7 +13,7 @@ class RemoteTree(QObject):
         super(RemoteTree, self).__init__()
         self.tv = tv
         self.clnt_socket = clnt_socket
-        self.remote_model = QStandardItemModel()
+        self.remote_model = QStandardItemModel(self)
         self.tv.header().hide()
         self.tv.setModel(self.remote_model)
         self.clnt_list = list()
@@ -49,7 +49,7 @@ class RemoteTree(QObject):
                 self.clnt_list.append(i)
             self.children_item_update(self.remote_model, name_list)
             for cid in cid_list:
-                self.clnt_socket.hw_cmd_tree(cid, "/")
+                self.clnt_socket.hw_cmd_list("tree", cid, "/")
 
         if msg[0] == HW_DATA_TYPE_CMD:
             if msg[2] == "tree":
@@ -63,6 +63,8 @@ class RemoteTree(QObject):
                     tail_item = self.get_item_by_path(msg[3], item)
                     print("tail item: ", tail_item.text())
                     self.children_item_update(tail_item, msg[4])
+            elif msg[2] == "ls":
+                print("ls")
 
     @staticmethod
     def children_item_update(item, name_list):
@@ -131,17 +133,22 @@ class RemoteTree(QObject):
 
     def item_click(self, index):
         item = self.remote_model.itemFromIndex(index)
-        print("clicked: ", item.text())
-        print("parent item: ", self.get_full_path(item))
+        full_path = self.get_full_path(item)
+        print("ls path: ", full_path)
+        path_info = full_path.split('/', 2)
+        print("clnt: %s, path: %s, path len: %d" % (path_info[1], path_info[2], len(path_info)))
+        abs_path = "/" if len(path_info[2]) == 0 else path_info[2]
+        self.clnt_socket.hw_cmd_list("ls", self.get_cid_by_name(path_info[1]), abs_path)
 
     def item_expand(self, index):
         item = self.remote_model.itemFromIndex(index)
         for ic in range(item.rowCount()):
-            print(item.child(ic).text())
             full_path = self.get_full_path(item.child(ic))
+            print("expand path: ", full_path)
             path_info = full_path.split('/', 2)
-            print("clnt: %s, path: %s" % (path_info[-2], path_info[-1]))
-            self.clnt_socket.hw_cmd_tree(self.get_cid_by_name(path_info[-2]), path_info[-1])
+            print("clnt: %s, path: %s, path len: %d" % (path_info[1], path_info[2], len(path_info)))
+            abs_path = "/" if len(path_info[2]) == 0 else path_info[2]
+            self.clnt_socket.hw_cmd_list("tree", self.get_cid_by_name(path_info[1]), abs_path)
 
         '''
         item1 = QStandardItem(CLNT_NAME)

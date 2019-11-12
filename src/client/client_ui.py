@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'client.ui'
+# Form implementation generated from reading ui file '.\client.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.13.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -67,13 +67,14 @@ class Ui_MainWindow(object):
         self.remoteFileTv.setObjectName("remoteFileTv")
         self.verticalLayout.addWidget(self.remoteFileTv)
         self.horizontalLayout.addLayout(self.verticalLayout)
-        self.fileLv = QtWidgets.QListView(self.centralwidget)
-        self.fileLv.setObjectName("fileLv")
-        self.horizontalLayout.addWidget(self.fileLv)
+        self.fileTabView = QtWidgets.QTableView(self.centralwidget)
+        self.fileTabView.setObjectName("fileTabView")
+        self.horizontalLayout.addWidget(self.fileTabView)
+        self.horizontalLayout.setStretch(1, 1)
         self.verticalLayout_2.addLayout(self.horizontalLayout)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 778, 26))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 778, 21))
         self.menubar.setObjectName("menubar")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
