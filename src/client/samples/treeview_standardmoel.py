@@ -17,6 +17,7 @@ class TreeView(QTreeView):
         self.model = QStandardItemModel(4, 2)
         self.model.setHeaderData(0, Qt.Horizontal, "service")
         self.model.setHeaderData(1, Qt.Horizontal, "Details")
+        '''
         item1 = QStandardItem("avahi-daemon")
         item2 = QStandardItem("bluetooth")
         item3 = QStandardItem("crond")
@@ -36,7 +37,7 @@ class TreeView(QTreeView):
             self.model.insertColumns(0, 1, parent)
             index = self.model.index(0, 0, parent)
             self.model.setData(index, i)
-
+        '''
         self.setModel(self.model)
 
     def returnTheItems(self):
@@ -52,11 +53,11 @@ class TreeView(QTreeView):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     view = TreeView()
-    view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    # view.setEditTriggers(QAbstractItemView.NoEditTriggers)
     # view.header().setResizeMode(QHeaderView.ResizeToContents)
-    view.resize(300, 280)
+    # view.resize(300, 280)
 
-    view.setWindowTitle("linux manager")
+    # view.setWindowTitle("linux manager")
     view.show()
     sys.exit(app.exec_())
 

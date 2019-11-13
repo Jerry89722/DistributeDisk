@@ -6,8 +6,7 @@ for dri in dris:
     print(dri.filePath())
     print(type(dri.filePath()))
 print("------------------")
-dir_path = QDir("C:/")
-dirs = dir_path.entryInfoList(filters=QDir.Dirs)
+dirs = QDir("C:/").entryInfoList(filters=QDir.NoDotAndDotDot | QDir.AllEntries)
 for d in dirs:
     print(d.fileName())
 
