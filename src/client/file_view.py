@@ -37,6 +37,7 @@ class FileView(QObject):
         i = 0
         if data_type == HW_DATA_TYPE_CMD:
             if cmd == "ls":
+                self.item_model.removeRows(0, self.item_model.rowCount())
                 for file in files:
                     self.item_model.setItem(i, 0, QStandardItem(file["name"]))
                     self.item_model.setItem(i, 1, QStandardItem(str(file["size"])))

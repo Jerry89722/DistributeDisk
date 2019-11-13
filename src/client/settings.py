@@ -1,5 +1,8 @@
-CLNT_NAME = "hp"
-CLNT_ID = 1
+CLNT_NAME = "dell"
+CLNT_ID = 2
+
+SYS_TYPE = "windows"
+
 HW_HOST = "www.huiwanit.cn"
 HW_PORT = 9001
 
@@ -8,8 +11,6 @@ HW_DATA_TYPE_HEARTBEAT = 1
 HW_DATA_TYPE_ACK = 2
 HW_DATA_TYPE_CMD = 3
 HW_DATA_TYPE_BINARY = 4
-
-SYS_TYPE = "windows"
 
 HW_FILE_TYPE_NONE = 0
 HW_FILE_TYPE_FILE = 1
