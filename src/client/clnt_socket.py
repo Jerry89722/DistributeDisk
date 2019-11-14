@@ -156,7 +156,6 @@ class ClntSocket(QObject):
                                 self.ui_event_trigger("lv", recved_data)
                             break
                 elif cmd == "tree" or cmd == "ls":
-                    print("paylaod_tree reply: ", payload_list_reply)
                     payload_reply = copy.deepcopy(payload_list_reply)
                     payload_reply["uuid"] = payload_dict["uuid"]
                     payload_reply["list"] = self.file_list_get(cmd, payload_dict["path"])
@@ -180,23 +179,28 @@ class ClntSocket(QObject):
     @staticmethod
     def file_list_get(cmd, path):
         file_list = list()
+        abs_path = path
+        if SYS_TYPE != "windows" and abs_path != "/":
+            abs_path = "/" + abs_path
+        print("absolute path: ", abs_path)
         if cmd == "tree":
-            if path == "/" and SYS_TYPE is "windows":
+            if abs_path == "/" and SYS_TYPE is "windows":
                 dirs = QDir.drives()
                 for d in dirs:
                     file_list.append(d.filePath().strip('/'))
             else:
-                dirs = QDir(path).entryInfoList(filters=QDir.Dirs | QDir.NoDotAndDotDot)
+                dirs = QDir(abs_path).entryInfoList(filters=QDir.Dirs | QDir.NoDotAndDotDot)
                 for d in dirs:
+                    print("dir name: ", d.fileName())
                     file_list.append(d.fileName())
         elif cmd == "ls":
-            print(path)
-            if path == "/" and SYS_TYPE is "windows":
+            print(abs_path)
+            if abs_path == "/" and SYS_TYPE is "windows":
                 dirs = QDir.drives()
                 for d in dirs:
                     file_list.append({"name": d.filePath().strip('/'), "type": QDir.Dirs, "size": 0})
             else:
-                dirs = QDir(path).entryInfoList(filters=QDir.AllEntries | QDir.NoDotAndDotDot)
+                dirs = QDir(abs_path).entryInfoList(filters=QDir.AllEntries | QDir.NoDotAndDotDot)
                 for d in dirs:
                     file_type = HW_FILE_TYPE_NONE
                     size = 0
