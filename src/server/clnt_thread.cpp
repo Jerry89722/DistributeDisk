@@ -281,11 +281,9 @@ int ClntThread::stream_send(int fd, uint8_t* buf, int len, int retry_times)
 // static 
 int ClntThread::stream_recv(int fd, uint8_t* buf, int len, int retry_times)
 {
-	int t_len = 0, ret = 0, i;
+	int t_len = 0, ret = 0; //, i;
 	
-	int n = (retry_times <= 0 ? 1: retry_times);
-
-	for(i = 0; i < n; ++i){
+	for(;;){
 		
 		ret = recv(fd, buf + t_len, len - t_len, 0);
 
@@ -314,7 +312,7 @@ int ClntThread::stream_recv(int fd, uint8_t* buf, int len, int retry_times)
 
 			}else if(t_len < len){
 				
-				usleep(50000);  // n * 10ms
+				// usleep(50000);  // n * 10ms
 
 				continue;
 			}else if(t_len > len){
