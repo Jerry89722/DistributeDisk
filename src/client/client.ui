@@ -68,7 +68,7 @@
      </layout>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,1">
       <item>
        <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,0">
         <item>
@@ -94,7 +94,7 @@
        </layout>
       </item>
       <item>
-       <widget class="QListView" name="fileLv"/>
+       <widget class="QTableView" name="fileTabView"/>
       </item>
      </layout>
     </item>
@@ -106,7 +106,7 @@
      <x>0</x>
      <y>0</y>
      <width>778</width>
-     <height>26</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>

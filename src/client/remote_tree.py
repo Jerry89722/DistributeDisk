@@ -148,7 +148,11 @@ class RemoteTree(QObject):
             path_info = full_path.split('/', 2)
             print("clnt: %s, path: %s, path len: %d" % (path_info[1], path_info[2], len(path_info)))
             abs_path = "/" if len(path_info[2]) == 0 else path_info[2]
-            self.clnt_socket.hw_cmd_list("tree", self.get_cid_by_name(path_info[1]), abs_path)
+            if SYS_TYPE != "windows":
+                abs_path = "/" + abs_path
+            cid = self.get_cid_by_name(path_info[1])
+            print("expand get tree list, abs path: %s, clint: %s, cid: %d" % (abs_path, path_info[1], cid))
+            self.clnt_socket.hw_cmd_list("tree", cid, abs_path)
 
         '''
         item1 = QStandardItem(CLNT_NAME)

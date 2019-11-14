@@ -20,6 +20,7 @@ class App(QWidget):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
         self.model = QFileSystemModel()
+
         r_inx = self.model.setRootPath(".")
         self.tree = QTreeView()
         self.tree.setModel(self.model)
