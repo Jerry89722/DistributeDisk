@@ -174,7 +174,7 @@ class ClntSocket(QObject):
                     "end":23456
                 }
                 '''
-                print("")
+        print("work done")
 
     @staticmethod
     def file_list_get(cmd, path):

@@ -1,6 +1,6 @@
 import time
 
-from PyQt5.QtCore import QModelIndex, QObject, pyqtSignal, Qt
+from PyQt5.QtCore import QObject, Qt
 from PyQt5.QtWidgets import QTreeView
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
@@ -54,42 +54,49 @@ class RemoteTree(QObject):
         if msg[0] == HW_DATA_TYPE_CMD:
             if msg[2] == "tree":
                 # recved_data = [data_type, cid, act["cmd"], act["path"], act["list"]]
-                item = self.remote_model.findItems(self.get_name_by_cid(msg[1]))[0]
-                print("dest device item: ", item.text())  # dell
-                if msg[3] == "/":
-                    for m in msg[4]:
-                        item.appendRow(QStandardItem(m))
-                else:
-                    tail_item = self.get_item_by_path(msg[3], item)
-                    print("tail item: ", tail_item.text())
-                    self.children_item_update(tail_item, msg[4])
-            elif msg[2] == "ls":
-                print("ls")
+                root_item = self.remote_model.findItems(self.get_name_by_cid(msg[1]))[0]
+                print("dest device item: ", root_item.text())  # dell
+                tail_item = root_item
+                if msg[3] is not "/":
+                    tail_item = self.get_item_by_path(msg[3], root_item)
+                print("tail item: ", tail_item.text())
+                self.children_item_update(tail_item, msg[4])
 
     @staticmethod
     def children_item_update(item, name_list):
-        print("item type: ", type(item))
         item_type = type(item)
 
         children_item = list()
         if item_type == QStandardItemModel:
             children_item = item.findItems("", Qt.MatchContains)
         else:
+            print("start update item: ", item.text())
             row_cnt = item.rowCount()
             for i in range(row_cnt):
-                children_item.append(item.child(i))
+                ic = item.child(i)
+                if ic is None:
+                    print("child item is None???")
+                    continue
+                children_item.append(ic)
 
         children = list()
         for child in children_item:
-            print("child: ", item_type, child.text())
-            children.append(child.text())
+            child_name = child.text()
+            children.append(child_name)
+        print("children: ", children)
 
+        for name in children:
+            if name not in name_list:
+                child_index = children.index(name)
+                # print("child name: %s, index: %d" % (name, child_index))
+                if item_type == QStandardItemModel:
+                    item.takeChild(item.child(child_index))
+                else:
+                    item.takeChild(child_index)
         for name in name_list:
             if name not in children:
                 item.appendRow(QStandardItem(name))
-        for name in children:
-            if name not in name_list:
-                item.takeChild(item.child(children.index(name)))
+        print("children item update done")
 
     def get_item_by_path(self, path: str, item: QStandardItem):
         item_name_list = path.strip('/').split('/')
