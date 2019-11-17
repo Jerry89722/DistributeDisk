@@ -164,7 +164,7 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 
 	cJSON_Delete(root);
 
-	sm_clnt_list.push_back(this);
+	sm_clnt_list.push_front(this);
 
 	list<ClntThread*>::iterator it;
 
@@ -178,9 +178,16 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 		root = cJSON_CreateArray();
 
 		for(it_sub = sm_clnt_list.begin(); it_sub != sm_clnt_list.end(); ++it_sub){
+
 			if(it == it_sub){
 
 				continue;
+			}
+			
+			if((*it)->m_cid == (*it_sub)->m_cid){
+				list<ClntThread*>::iterator it_tmp = it_sub;
+				++it_sub;
+				sm_clnt_list.erase(it_tmp);
 			}
 			
 			cJSON* clnt_node = cJSON_CreateObject();
