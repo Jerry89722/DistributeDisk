@@ -1,23 +1,37 @@
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QTableView
+from PyQt5.QtWidgets import QTableView, QMenu
 
+from clnt_socket import ClntSocket
 from settings import *
 
 
 class FileView(QObject):
     send_lv_msg = pyqtSignal(object)
 
-    def __init__(self, file_tv: QTableView):
+    def __init__(self, file_tv: QTableView, clnt_socket: ClntSocket):
         super(FileView, self).__init__()
+        self.cmd = ""
+        self.from_cid = 0
+        self.from_path = ""
+        self.from_list = []
         self.cur_path = ""
         self.cur_cid = 0
         self.file_tv = file_tv
+        self.clnt_socket = clnt_socket
+        self.menu = QMenu()
+        self.cut_opt = self.menu.addAction("cut")
+        self.cp_opt = self.menu.addAction("copy")
+        self.paste_opt = self.menu.addAction("paste")
+        self.rm_opt = self.menu.addAction("remove")
+        self.attr_opt = self.menu.addAction("attribution")
+
         self.item_model = QStandardItemModel()
         self.item_model.setColumnCount(2)
         self.item_model.setHeaderData(0, Qt.Horizontal, "name")
         self.item_model.setHeaderData(1, Qt.Horizontal, "size")
-
+        self.file_tv.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.file_tv.customContextMenuRequested.connect(self.custom_right_menu)
         self.file_tv.setModel(self.item_model)
         self.file_tv.verticalHeader().setHidden(True)
 
@@ -25,8 +39,48 @@ class FileView(QObject):
 
         # self.item_model.setItem(0, 0, QStandardItem("file1"))
         # self.item_model.setItem(0, 1, QStandardItem("32k"))
+        # self.item_model.setItem(1, 0, QStandardItem("file2"))
+        # self.item_model.setItem(1, 1, QStandardItem("64k"))
 
-    def ui_event_handle(self, msg):
+    def custom_right_menu(self, pos):
+        print("right click, pos type: ", type(pos))
+        cur = self.file_tv.currentIndex()
+        if cur is None:
+            return
+        print("current index: ", cur)
+        print("current file: ", cur.data())
+        print("current path cid[%d]: %s" % (self.cur_cid, self.cur_path))
+        action = self.menu.exec_(self.file_tv.mapToGlobal(pos))
+        if action == self.cut_opt:
+            print("cut: %s%s" % (self.cur_path, cur.data()))
+            self.cmd = "mv"
+            self.from_path = self.cur_path
+            self.from_list = [cur.data()]
+            return
+        elif action == self.cp_opt:
+            print("cp: %s%s" % (self.cur_path, cur.data()))
+            self.cmd = "cp"
+            self.from_cid = self.cur_cid
+            self.from_path = self.cur_path
+            self.from_list = [cur.data()]
+            return
+        elif action == self.paste_opt:
+            print("paste: ", self.cur_path)
+            # cid, cmd_str, sponsor_cid, from_path, from_list, to_path
+            self.clnt_socket.hw_cmd_cp_mv(self.cur_cid, self.cmd,
+                                          self.from_cid, self.from_path, self.from_list,
+                                          self.cur_path)
+            return
+        elif action == self.rm_opt:
+            print("rm: %s%s" % (self.cur_path, cur.data()))
+            return
+        elif action == self.attr_opt:
+            print("attribution: %s%s" % (self.cur_path, cur.data()))
+            return
+        else:
+            return
+
+    def file_view_update(self, msg):
         print(msg)
         # msg:  [data_type, cid, act["cmd"], act["path"], act["list"]]
         data_type = msg[0]

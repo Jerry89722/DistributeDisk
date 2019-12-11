@@ -19,26 +19,8 @@ class RemoteTree(QObject):
         self.clnt_list = list()
         self.tv.clicked.connect(self.item_click)
         self.tv.expanded.connect(self.item_expand)
-        '''
-        item1 = QStandardItem("AAAA")
-        self.remote_model.appendRow(item1)
-        item2 = QStandardItem("aaaa")
-        item1.appendRow(item2)
-        item3 = QStandardItem("BBBB")
-        self.remote_model.appendRow(item3)
-        item9 = QStandardItem("MMMM")
-        self.remote_model.appendRow(item9)
-        item4 = QStandardItem("bbbb1")
-        item3.appendRow(item4)
-        item5 = QStandardItem("bbbb2")
-        item3.appendRow(item5)
-        item6 = QStandardItem("bbbb3")
-        item3.appendRow(item6)
-        print("aaaa: ", item3.rowCount())
-        print("aa", len(self.remote_model.findItems("", flags=Qt.MatchContains)))
-        '''
 
-    def ui_event_handle(self, msg):
+    def tree_view_update(self, msg):
         print("get a signal: ", msg)
         if msg[0] == HW_DATA_TYPE_LOGIN:
             name_list = list()
@@ -51,7 +33,7 @@ class RemoteTree(QObject):
             for cid in cid_list:
                 self.clnt_socket.hw_cmd_list("tree", cid, "/")
 
-        if msg[0] == HW_DATA_TYPE_CMD:
+        elif msg[0] == HW_DATA_TYPE_CMD:
             if msg[2] == "tree":
                 # recved_data = [data_type, cid, act["cmd"], act["path"], act["list"]]
                 root_item = self.remote_model.findItems(self.get_name_by_cid(msg[1]))[0]
