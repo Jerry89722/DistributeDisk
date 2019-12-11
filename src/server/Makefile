@@ -1,5 +1,5 @@
 PROJ   = server
-OBJS   = main.o server.o server_socket.o clnt_thread.o cJSON.o
+OBJS   = main.o server.o server_socket.o clnt_thread.o cJSON.o hw_log.o
 		 
 CXX    = g++
 RM     = rm -rf

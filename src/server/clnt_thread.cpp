@@ -18,6 +18,7 @@
 #include "cJSON.h"
 
 #include "clnt_thread.h"
+#include "hw_log.h"
 
 #define COUT cout<<m_name<<":"
 
@@ -201,7 +202,7 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 		}
 
 
-		if(cJSON_GetArraySize(root) > 0){
+		if(cJSON_GetArraySize(root) >= 0){
 
 			char* s = cJSON_PrintUnformatted(root);
 
@@ -232,11 +233,9 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 int ClntThread::stream_send(int fd, uint8_t* buf, int len, int retry_times)
 {
 	
-	int t_len = 0, ret = 0, i;
+	int t_len = 0, ret = 0;
 	
-	int n = (retry_times <= 0 ? 1: retry_times);
-
-	for(i = 0; i < n; ++i){
+	for(;;){
 		
 		ret = send(fd, buf + t_len, len - t_len, 0);
 		
@@ -373,6 +372,8 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	}else{
 		
 		COUT << "header recv done: " << len << endl;
+
+		//hw_hex_dump("recved header", m_hbuf, len);
 	}
 
 	int size = *((uint16_t*)m_hbuf);
@@ -421,6 +422,8 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		COUT << "body recved, content: " << m_payload_request.m_buf << endl;
 		
 		m_payload_request.m_offset = len;
+
+		// hw_hex_dump("recved body", m_payload_request.m_buf, len);
 	}
 
 	switch(type){
@@ -436,7 +439,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 		
 		break;
 	case _HW_DATA_TYPE_CMD:
-
+	case _HW_DATA_TYPE_BINARY:
 		request_push_destination(m_payload_request, cid);
 		
 		break;
@@ -538,6 +541,8 @@ void ClntThread::request_thread(void)
 			return ;
 		}
 
+		//hw_hex_dump("send done", m_sbuf, 8 + req_pld.m_offset);
+
 	}
 }
 
@@ -564,10 +569,10 @@ int ClntThread::pack(Payload& payload)
 	p += payload.m_offset;
 	*p = 0;
 
-	COUT << "size:" << *(uint16_t*)m_sbuf << endl;
-	COUT << "type:" << *(uint16_t*)(&m_sbuf[2]) << endl;
-	COUT << "cid:" << *(uint32_t*)(&m_sbuf[4]) << endl;
-	COUT << "payload:" << (char*)(&m_sbuf[8]) << endl;
+	COUT << "pack size:" << *(uint16_t*)m_sbuf << endl;
+	COUT << "pack type:" << *(uint16_t*)(&m_sbuf[2]) << endl;
+	COUT << "pack cid:" << *(uint32_t*)(&m_sbuf[4]) << endl;
+	COUT << "pack payload:" << (char*)(&m_sbuf[8]) << endl;
 
 	return 0;
 }
