@@ -62,7 +62,7 @@ ServerSocket::ServerSocket(string ip, int port)
 	cout << "server socket init done" << endl;
 }
 
-void ServerSocket::clntAccept(void)
+void ServerSocket::clntAccept(UserManager& um)
 {
 	int fd = 0;
 	for(;;){
@@ -76,7 +76,7 @@ void ServerSocket::clntAccept(void)
 			continue;
 		}
 		cout << "new clnt thread" << endl;
-		(new ClntThread(fd))->start();
+		(new ClntThread(fd, um))->start();
 	}
 }
 

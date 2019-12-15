@@ -9,6 +9,7 @@
 #define __SERVER_H
 
 #include "server_socket.h"
+#include "user_manager.h"
 
 struct ClntInfo_t{
 	pthread_t tid;
@@ -22,6 +23,7 @@ public:
 
 	void start(void);
 private:
+	UserManager m_user_manager;
 	ServerSocket m_socket;
 };
 

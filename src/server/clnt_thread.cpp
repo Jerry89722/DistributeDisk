@@ -18,13 +18,12 @@
 #include "cJSON.h"
 
 #include "clnt_thread.h"
+#include "user_manager.h"
 #include "hw_log.h"
 
 #define COUT cout<<m_name<<":"
 
 using namespace std;
-
-list<ClntThread*> ClntThread::sm_clnt_list;
 
 /**********************payload*********************/
 Payload::Payload(ClntThread& clnt_from, int size)
@@ -48,8 +47,8 @@ Payload::~Payload()
 
 /**********************payload*********************/
 
-ClntThread::ClntThread(int fd)
-:m_payload_request(*this), m_fd(fd)
+ClntThread::ClntThread(int fd, UserManager& user_manager)
+:m_user_manager(user_manager), m_payload_request(*this), m_fd(fd)
 {
 	m_sbuf = new uint8_t[HW_SEND_BUF_LEN];
 
@@ -66,8 +65,6 @@ ClntThread::ClntThread(int fd)
 	m_timer_watcher.set(m_loop);
 	m_timer_watcher.set<ClntThread, &ClntThread::timer_handle>(this);
 	m_timer_watcher.start();
-
-	sm_clnt_list.remove(this);
 }
 
 ClntThread::~ClntThread()
@@ -93,7 +90,7 @@ ClntThread::~ClntThread()
 	
 	close(m_fd);
 
-	sm_clnt_list.remove(this);
+	m_pui->user_clnts.remove(this);
 	
 	
 	delete m_sbuf;
@@ -117,7 +114,7 @@ void ClntThread::start(void)
 {
 	pthread_create(&m_work_tid, NULL, work_thread, this);
 
-	/* use to handle clnt request, create here and not exit util clnt close, 
+	/* use to handle clnt request, create here and not exit until clnt close, 
 	 * in case create this thread frequently */
 	pthread_create(&m_request_tid, NULL, request_handle_thread, this);
 }
@@ -151,7 +148,7 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 	
 	m_cid = cid;
 
-	m_name = string((char*)(r_payload.m_buf), r_payload.m_offset);
+	// m_name = string((char*)(r_payload.m_buf), r_payload.m_offset);
 
 	r_payload.m_buf[r_payload.m_offset + 1] = 0;
 
@@ -162,23 +159,49 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 	
 	node = cJSON_GetObjectItem(root, "name");
 	m_name = string(node->valuestring);
+	
+	node = cJSON_GetObjectItem(root, "user");
+	string user_name = string(node->valuestring);
 
+	node = cJSON_GetObjectItem(root, "pwd");
+	string passwd = string(node->valuestring);
+	
 	cJSON_Delete(root);
 
-	sm_clnt_list.push_front(this);
+	// login info check;
+	if(!m_user_manager.login_info_check(user_name, passwd)){
 
+		COUT << "user info check failed" << endl;
+		return -1;
+	}
+	
+	// push online client info list to each client
+	try{
+
+		UserInfo& ui = m_user_manager[user_name];
+
+		m_pui = &ui;
+	}catch (exception& ex){
+
+		COUT << ex.what() << endl;
+
+		return -2;
+	}
+	
 	list<ClntThread*>::iterator it;
+	
+	m_pui->user_clnts.push_front(this);
 
 	Payload pld = Payload(*this, HW_NORMAL_BUF_LEN);
 	pld.m_type = _HW_DATA_TYPE_LOGIN;
 
-	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+	for(it = m_pui->user_clnts.begin(); it != m_pui->user_clnts.end(); ++it){
 		
 		list<ClntThread*>::iterator it_sub;
 		
 		root = cJSON_CreateArray();
 
-		for(it_sub = sm_clnt_list.begin(); it_sub != sm_clnt_list.end(); ++it_sub){
+		for(it_sub = m_pui->user_clnts.begin(); it_sub != m_pui->user_clnts.end(); ++it_sub){
 
 			if(it == it_sub){
 
@@ -188,7 +211,9 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 			if((*it)->m_cid == (*it_sub)->m_cid){
 				list<ClntThread*>::iterator it_tmp = it_sub;
 				++it_sub;
-				sm_clnt_list.erase(it_tmp);
+				m_pui->user_clnts.erase(it_tmp);
+				COUT << "client last login info remove" << endl;
+				// delete(it_tmp);
 			}
 			
 			cJSON* clnt_node = cJSON_CreateObject();
@@ -226,7 +251,7 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 			(*it)->notify_it(HW_RECVED_EVENT);
 		}
 	}
-
+	cout << "clnt verify done" << endl;
 	return 0;
 }
 
@@ -463,7 +488,7 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
 	
 	COUT << "request cid: " << cid << endl;
 
-	for(it = sm_clnt_list.begin(); it != sm_clnt_list.end(); ++it){
+	for(it = m_pui->user_clnts.begin(); it != m_pui->user_clnts.end(); ++it){
 		
 		COUT << "traverse cid: " << (*it)->m_cid << endl;
 

@@ -12,11 +12,13 @@
 
 using namespace std;
 
+class UserManager;
+
 class ServerSocket{
 public:
 	ServerSocket(string ip, int port);
 
-	void clntAccept(void);
+	void clntAccept(UserManager& user_manager);
 
 private:
 	int m_sockfd;

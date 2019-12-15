@@ -48,6 +48,8 @@ enum __HW_CLNT_CMD{
 };
 
 class ClntThread;
+class UserManager;
+class UserInfo;
 
 class Payload{
 public:
@@ -66,7 +68,7 @@ private:
 
 class ClntThread{
 public:
-	ClntThread(int fd);
+	ClntThread(int fd, UserManager& user_manager);
 
 	~ClntThread(void);
 	
@@ -88,9 +90,10 @@ public:
 
 	static int stream_send(int fd, uint8_t* buf, int len, int retry_times);
 
-	static list<ClntThread*> sm_clnt_list;
-
 	deque<Payload> m_deque_cmds;
+
+	UserInfo* m_pui;
+	UserManager& m_user_manager;
 
 	uint32_t m_cid;
 	string m_name;
