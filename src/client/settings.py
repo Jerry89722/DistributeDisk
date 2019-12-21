@@ -1,5 +1,5 @@
-CLNT_NAME = "dell"
-CLNT_ID = 2
+CLNT_NAME = "hp"
+CLNT_ID = 1
 
 SYS_TYPE = "windows"
 
