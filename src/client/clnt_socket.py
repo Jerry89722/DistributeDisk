@@ -247,7 +247,9 @@ class ClntSocket(QObject):
                 print("to: ", info["to"])
                 bn = self.get_basename(info["from"])
                 print("basename: ", bn)
-                full_path = info["to"] + bn
+                if SYS_TYPE is not "windows":
+                    full_path = '/'
+                full_path += info["to"] + bn
                 print("full path: ", full_path)
 
                 if bin_len == 0:    # is dir
@@ -365,7 +367,9 @@ class ClntSocket(QObject):
         reply["current"] = 0
         # reply["total"] = len(cmd_info["from_list"])
         for f in cmd_info["from_list"]:
-            full_path = cmd_info["from_path"] + f
+            if SYS_TYPE is not "windows":
+                full_path = '/'
+            full_path += cmd_info["from_path"] + f
             print("count full path: ", full_path)
             if os.path.isdir(full_path):
                 print("is dir")
@@ -381,7 +385,9 @@ class ClntSocket(QObject):
             return
 
         for f in cmd_info["from_list"]:
-            full_path = cmd_info["from_path"] + f
+            if SYS_TYPE is not "windows":
+                full_path = '/'
+            full_path += cmd_info["from_path"] + f
             print("operate full path: ", full_path)
             if os.path.isdir(full_path):
                 print("operate is dir")
