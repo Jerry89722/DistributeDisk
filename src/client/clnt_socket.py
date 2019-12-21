@@ -143,6 +143,9 @@ class ClntSocket(QObject):
         self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload.encode("utf-8"), len(payload), cid)
 
     def hw_cmd_cp_mv(self, cid=0, cmd_str=None, from_cid=0, from_path=None, from_list=None, to_path=None):
+        if cid == CLNT_ID and from_cid == cid:
+            print("local task !!!")
+            return
         payload = copy.deepcopy(payload_paste)
         payload["uuid"] = uuid.uuid1().__str__()
         payload["sponsor_cid"] = CLNT_ID
@@ -361,8 +364,6 @@ class ClntSocket(QObject):
         reply["to"] = cmd_info["to"]
         reply["current"] = 0
         # reply["total"] = len(cmd_info["from_list"])
-        total = 0
-        total_size = 0
         for f in cmd_info["from_list"]:
             full_path = cmd_info["from_path"] + f
             print("count full path: ", full_path)
@@ -375,6 +376,9 @@ class ClntSocket(QObject):
                 print("is regular file")
                 reply["total"] += 1
                 reply["total_size"] += os.path.getsize(full_path)
+        if reply["from_cid"] == reply["to_cid"]:
+            print("local task, sponsor is: ", cid)
+            return
 
         for f in cmd_info["from_list"]:
             full_path = cmd_info["from_path"] + f

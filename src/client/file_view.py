@@ -25,14 +25,9 @@ class FileView(QObject):
         self.paste_opt = self.menu.addAction("paste")
         self.rm_opt = self.menu.addAction("remove")
         self.attr_opt = self.menu.addAction("attribution")
-
-        self.item_model = QStandardItemModel()
-        self.item_model.setColumnCount(2)
-        self.item_model.setHeaderData(0, Qt.Horizontal, "name")
-        self.item_model.setHeaderData(1, Qt.Horizontal, "size")
+        self.item_model = None
         self.file_tv.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_tv.customContextMenuRequested.connect(self.custom_right_menu)
-        self.file_tv.setModel(self.item_model)
         self.file_tv.verticalHeader().setHidden(True)
 
         self.file_tv.clicked.connect(self.item_click)
@@ -41,6 +36,16 @@ class FileView(QObject):
         # self.item_model.setItem(0, 1, QStandardItem("32k"))
         # self.item_model.setItem(1, 0, QStandardItem("file2"))
         # self.item_model.setItem(1, 1, QStandardItem("64k"))
+
+    def switch_to_local(self, model, index):
+        if self.item_model is not model:
+            print("switch to local file view")
+            self.item_model = model
+            self.cur_cid = CLNT_ID
+            self.file_tv.setModel(model)
+
+        self.cur_path = self.item_model.filePath(index) + "/"
+        self.file_tv.setRootIndex(index)
 
     def custom_right_menu(self, pos):
         print("right click, pos type: ", type(pos))
@@ -98,5 +103,11 @@ class FileView(QObject):
                     i += 1
 
     def item_click(self, index):
-        item = self.item_model.itemFromIndex(index)
-        print("lv item clicked: ", item.text())
+        print("lv item clicked")
+        if self.cur_cid == CLNT_ID:
+            print("local file view")
+            item = self.item_model.fileName(index)
+        else:
+            print("remote file view")
+            item = self.item_model.itemFromIndex(index).text()
+        print("lv item clicked: ", item)
