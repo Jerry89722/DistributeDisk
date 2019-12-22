@@ -5,7 +5,7 @@ SYS_TYPE = "windows"
 
 HW_HOST = "www.huiwanit.cn"
 HW_PORT = 9001
-
+DATE_FORMAT = "yyyy/M/d h:m:s"
 HW_DATA_TYPE_LOGIN = 0
 HW_DATA_TYPE_HEARTBEAT = 1
 HW_DATA_TYPE_ACK = 2
@@ -23,6 +23,8 @@ HW_LOGIN_OVERTIME = 2
 
 LOGO_PATH = "./res/spider_net.png"
 
+TYPE_FILE_PATH = "./res/type_files/type"
+
 payload_login = {"uuid": None, "name": CLNT_NAME, "user": None, "pwd": None}
 # [{"name": "hp", "cid":1}, {"name":"dell", "cid":2}]
 # {"code": n}
@@ -30,7 +32,7 @@ payload_login = {"uuid": None, "name": CLNT_NAME, "user": None, "pwd": None}
 payload_list = {"uuid": None, "cmd": "list", "path": None}
 payload_list_reply = {"uuid": None, "list": []}
 # tree list ["name1", "name2", "namex"]
-# ls list [{"name":"name1", "type":HW_FILE_TYPE_FILE}]
+# ls list [{"name":"name1", "size":1024, "type":HW_FILE_TYPE_FILE, "Modified": "2019-12-22 10:8:34"}]
 
 # paste(cp/mv)
 payload_paste = {

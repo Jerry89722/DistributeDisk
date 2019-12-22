@@ -1,6 +1,8 @@
-from PyQt5.QtCore import QObject, pyqtSignal, Qt
+import os
+
+from PyQt5.QtCore import QObject, pyqtSignal, Qt, QFileInfo
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QTableView, QMenu
+from PyQt5.QtWidgets import QTableView, QMenu, QFileIconProvider
 
 from clnt_socket import ClntSocket
 from settings import *
@@ -98,9 +100,33 @@ class FileView(QObject):
             if cmd == "ls":
                 self.item_model.removeRows(0, self.item_model.rowCount())
                 for file in files:
-                    self.item_model.setItem(i, 0, QStandardItem(file["name"]))
-                    self.item_model.setItem(i, 1, QStandardItem(str(file["size"])))
+                    if file["type"] == HW_FILE_TYPE_DIR:
+                        item = QStandardItem(QFileIconProvider().icon(QFileIconProvider.Folder), file["name"])
+                    elif file["type"] == HW_FILE_TYPE_FILE:
+                        print("file")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+                    elif file["file"] == HW_FILE_TYPE_SYMLINK:
+                        print("symbol_link")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+                    else:
+                        print("unknown file type")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+
+                    self.item_model.setItem(i, 0, item)
+                    if file["type"] is not HW_FILE_TYPE_DIR:
+                        self.item_model.setItem(i, 1, QStandardItem(str(file["size"])))
+                    # self.item_model.setItem(i, 2, QStandardItem(str(file[""])))
+                    self.item_model.setItem(i, 3, QStandardItem(str(file["Modified"])))
                     i += 1
+
+    @staticmethod
+    def file_icon_get(filename: str):
+        ext = os.path.splitext(filename)[-1]
+        type_file = TYPE_FILE_PATH + ext
+        if os.path.exists(type_file) is False:
+            type_file = TYPE_FILE_PATH + "unknown"
+        file_info = QFileInfo(type_file)
+        return QFileIconProvider().icon(file_info)
 
     def item_click(self, index):
         print("lv item clicked")

@@ -1,7 +1,7 @@
 import time
 
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QTreeView
+from PyQt5.QtWidgets import QTreeView, QFileIconProvider
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 from clnt_socket import ClntSocket
@@ -86,7 +86,7 @@ class RemoteTree(QObject):
                     item.takeChild(child_index)
         for name in name_list:
             if name not in children:
-                item.appendRow(QStandardItem(name))
+                item.appendRow(QStandardItem(QFileIconProvider().icon(QFileIconProvider.Folder), name))
         print("children item update done")
 
     def get_item_by_path(self, path: str, item: QStandardItem):

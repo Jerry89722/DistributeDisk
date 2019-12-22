@@ -441,16 +441,21 @@ class ClntSocket(QObject):
                 dirs = QDir(abs_path).entryInfoList(filters=QDir.AllEntries | QDir.NoDotAndDotDot)
                 for d in dirs:
                     file_type = HW_FILE_TYPE_NONE
+                    mdate = ""
                     size = 0
                     if d.isDir():
                         file_type = HW_FILE_TYPE_DIR
+                        mdate = d.lastModified().toString(DATE_FORMAT)
+                        print("dir's modified date", mdate)
                     elif d.isFile():
                         file_type = HW_FILE_TYPE_FILE
                         size = d.size()
+                        mdate = d.lastModified().toString(DATE_FORMAT)
+                        print("file's modified date", mdate)
                     elif d.isSymLink():
                         file_type = HW_FILE_TYPE_SYMLINK
-                    file_list.append({"name": d.fileName(), "type": file_type, "size": size})
-                    print(file_list)
+                    file_list.append({"name": d.fileName(), "type": file_type, "size": size, "Modified": mdate})
+                print("ls file list: ", file_list)
         return file_list
 
     @staticmethod
