@@ -1,17 +1,19 @@
 import time
 
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QTreeView
+from PyQt5.QtWidgets import QTreeView, QFileIconProvider
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 from clnt_socket import ClntSocket
+from file_view import FileView
 from settings import *
 
 
 class RemoteTree(QObject):
-    def __init__(self, tv: QTreeView, clnt_socket: ClntSocket):
+    def __init__(self, tv: QTreeView, fv: FileView, clnt_socket: ClntSocket):
         super(RemoteTree, self).__init__()
         self.tv = tv
+        self.fv = fv
         self.clnt_socket = clnt_socket
         self.remote_model = QStandardItemModel(self)
         self.tv.header().hide()
@@ -19,6 +21,13 @@ class RemoteTree(QObject):
         self.clnt_list = list()
         self.tv.clicked.connect(self.item_click)
         self.tv.expanded.connect(self.item_expand)
+
+        self.rt_model = QStandardItemModel(self)
+        self.rt_model.setColumnCount(4)
+        self.rt_model.setHeaderData(0, Qt.Horizontal, "Name")
+        self.rt_model.setHeaderData(1, Qt.Horizontal, "Size")
+        self.rt_model.setHeaderData(2, Qt.Horizontal, "Type")
+        self.rt_model.setHeaderData(3, Qt.Horizontal, "Date Modified")
 
     def tree_view_update(self, msg):
         print("get a signal: ", msg)
@@ -77,7 +86,7 @@ class RemoteTree(QObject):
                     item.takeChild(child_index)
         for name in name_list:
             if name not in children:
-                item.appendRow(QStandardItem(name))
+                item.appendRow(QStandardItem(QFileIconProvider().icon(QFileIconProvider.Folder), name))
         print("children item update done")
 
     def get_item_by_path(self, path: str, item: QStandardItem):
@@ -121,6 +130,9 @@ class RemoteTree(QObject):
         return None
 
     def item_click(self, index):
+        if self.fv.item_model is not self.rt_model:
+            self.fv.item_model = self.rt_model
+            self.fv.file_tv.setModel(self.rt_model)
         item = self.remote_model.itemFromIndex(index)
         full_path = self.get_full_path(item)
         print("ls path: ", full_path)

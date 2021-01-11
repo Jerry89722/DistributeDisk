@@ -143,6 +143,9 @@ class ClntSocket(QObject):
         self.push_back_tx_queue(HW_DATA_TYPE_CMD, payload.encode("utf-8"), len(payload), cid)
 
     def hw_cmd_cp_mv(self, cid=0, cmd_str=None, from_cid=0, from_path=None, from_list=None, to_path=None):
+        if cid == CLNT_ID and from_cid == cid:
+            print("local task !!!")
+            return
         payload = copy.deepcopy(payload_paste)
         payload["uuid"] = uuid.uuid1().__str__()
         payload["sponsor_cid"] = CLNT_ID
@@ -244,7 +247,9 @@ class ClntSocket(QObject):
                 print("to: ", info["to"])
                 bn = self.get_basename(info["from"])
                 print("basename: ", bn)
-                full_path = info["to"] + bn
+                if SYS_TYPE is not "windows":
+                    full_path = '/'
+                full_path += info["to"] + bn
                 print("full path: ", full_path)
 
                 if bin_len == 0:    # is dir
@@ -361,10 +366,10 @@ class ClntSocket(QObject):
         reply["to"] = cmd_info["to"]
         reply["current"] = 0
         # reply["total"] = len(cmd_info["from_list"])
-        total = 0
-        total_size = 0
         for f in cmd_info["from_list"]:
-            full_path = cmd_info["from_path"] + f
+            if SYS_TYPE is not "windows":
+                full_path = '/'
+            full_path += cmd_info["from_path"] + f
             print("count full path: ", full_path)
             if os.path.isdir(full_path):
                 print("is dir")
@@ -375,9 +380,14 @@ class ClntSocket(QObject):
                 print("is regular file")
                 reply["total"] += 1
                 reply["total_size"] += os.path.getsize(full_path)
+        if reply["from_cid"] == reply["to_cid"]:
+            print("local task, sponsor is: ", cid)
+            return
 
         for f in cmd_info["from_list"]:
-            full_path = cmd_info["from_path"] + f
+            if SYS_TYPE is not "windows":
+                full_path = '/'
+            full_path += cmd_info["from_path"] + f
             print("operate full path: ", full_path)
             if os.path.isdir(full_path):
                 print("operate is dir")
@@ -431,16 +441,21 @@ class ClntSocket(QObject):
                 dirs = QDir(abs_path).entryInfoList(filters=QDir.AllEntries | QDir.NoDotAndDotDot)
                 for d in dirs:
                     file_type = HW_FILE_TYPE_NONE
+                    mdate = ""
                     size = 0
                     if d.isDir():
                         file_type = HW_FILE_TYPE_DIR
+                        mdate = d.lastModified().toString(DATE_FORMAT)
+                        print("dir's modified date", mdate)
                     elif d.isFile():
                         file_type = HW_FILE_TYPE_FILE
                         size = d.size()
+                        mdate = d.lastModified().toString(DATE_FORMAT)
+                        print("file's modified date", mdate)
                     elif d.isSymLink():
                         file_type = HW_FILE_TYPE_SYMLINK
-                    file_list.append({"name": d.fileName(), "type": file_type, "size": size})
-                    print(file_list)
+                    file_list.append({"name": d.fileName(), "type": file_type, "size": size, "Modified": mdate})
+                print("ls file list: ", file_list)
         return file_list
 
     @staticmethod

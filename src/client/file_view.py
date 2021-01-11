@@ -1,6 +1,8 @@
-from PyQt5.QtCore import QObject, pyqtSignal, Qt
+import os
+
+from PyQt5.QtCore import QObject, pyqtSignal, Qt, QFileInfo
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QTableView, QMenu
+from PyQt5.QtWidgets import QTableView, QMenu, QFileIconProvider
 
 from clnt_socket import ClntSocket
 from settings import *
@@ -25,14 +27,9 @@ class FileView(QObject):
         self.paste_opt = self.menu.addAction("paste")
         self.rm_opt = self.menu.addAction("remove")
         self.attr_opt = self.menu.addAction("attribution")
-
-        self.item_model = QStandardItemModel()
-        self.item_model.setColumnCount(2)
-        self.item_model.setHeaderData(0, Qt.Horizontal, "name")
-        self.item_model.setHeaderData(1, Qt.Horizontal, "size")
+        self.item_model = None
         self.file_tv.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_tv.customContextMenuRequested.connect(self.custom_right_menu)
-        self.file_tv.setModel(self.item_model)
         self.file_tv.verticalHeader().setHidden(True)
 
         self.file_tv.clicked.connect(self.item_click)
@@ -41,6 +38,16 @@ class FileView(QObject):
         # self.item_model.setItem(0, 1, QStandardItem("32k"))
         # self.item_model.setItem(1, 0, QStandardItem("file2"))
         # self.item_model.setItem(1, 1, QStandardItem("64k"))
+
+    def switch_to_local(self, model, index):
+        if self.item_model is not model:
+            print("switch to local file view")
+            self.item_model = model
+            self.cur_cid = CLNT_ID
+            self.file_tv.setModel(model)
+
+        self.cur_path = self.item_model.filePath(index) + "/"
+        self.file_tv.setRootIndex(index)
 
     def custom_right_menu(self, pos):
         print("right click, pos type: ", type(pos))
@@ -93,10 +100,40 @@ class FileView(QObject):
             if cmd == "ls":
                 self.item_model.removeRows(0, self.item_model.rowCount())
                 for file in files:
-                    self.item_model.setItem(i, 0, QStandardItem(file["name"]))
-                    self.item_model.setItem(i, 1, QStandardItem(str(file["size"])))
+                    if file["type"] == HW_FILE_TYPE_DIR:
+                        item = QStandardItem(QFileIconProvider().icon(QFileIconProvider.Folder), file["name"])
+                    elif file["type"] == HW_FILE_TYPE_FILE:
+                        print("file")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+                    elif file["file"] == HW_FILE_TYPE_SYMLINK:
+                        print("symbol_link")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+                    else:
+                        print("unknown file type")
+                        item = QStandardItem(self.file_icon_get(file["name"]), file["name"])
+
+                    self.item_model.setItem(i, 0, item)
+                    if file["type"] is not HW_FILE_TYPE_DIR:
+                        self.item_model.setItem(i, 1, QStandardItem(str(file["size"])))
+                    # self.item_model.setItem(i, 2, QStandardItem(str(file[""])))
+                    self.item_model.setItem(i, 3, QStandardItem(str(file["Modified"])))
                     i += 1
 
+    @staticmethod
+    def file_icon_get(filename: str):
+        ext = os.path.splitext(filename)[-1]
+        type_file = TYPE_FILE_PATH + ext
+        if os.path.exists(type_file) is False:
+            type_file = TYPE_FILE_PATH + "unknown"
+        file_info = QFileInfo(type_file)
+        return QFileIconProvider().icon(file_info)
+
     def item_click(self, index):
-        item = self.item_model.itemFromIndex(index)
-        print("lv item clicked: ", item.text())
+        print("lv item clicked")
+        if self.cur_cid == CLNT_ID:
+            print("local file view")
+            item = self.item_model.fileName(index)
+        else:
+            print("remote file view")
+            item = self.item_model.itemFromIndex(index).text()
+        print("lv item clicked: ", item)
