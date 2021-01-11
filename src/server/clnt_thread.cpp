@@ -46,9 +46,8 @@ Payload::~Payload()
 }
 
 /**********************payload*********************/
-
 ClntThread::ClntThread(int fd, UserManager& user_manager)
-:m_user_manager(user_manager), m_payload_request(*this), m_fd(fd)
+:m_user_manager(user_manager), m_payload_request(*this), m_fd(fd), m_puser_info(NULL)
 {
 	m_sbuf = new uint8_t[HW_SEND_BUF_LEN];
 
@@ -60,21 +59,25 @@ ClntThread::ClntThread(int fd, UserManager& user_manager)
 	m_req_watcher.set<ClntThread, &ClntThread::request_event_handle>(this);
 	m_req_watcher.set(m_loop);
 	m_req_watcher.start();
-
+#ifdef TIMER_SWITCH
 	m_timer_watcher.set(10.0, 60.0);
 	m_timer_watcher.set(m_loop);
 	m_timer_watcher.set<ClntThread, &ClntThread::timer_handle>(this);
 	m_timer_watcher.start();
+#endif
 }
 
 ClntThread::~ClntThread()
 {
 	COUT << "client close, pid: " << pthread_self() << endl;
+
+#ifdef TIMER_SWITCH
 	if(m_timer_watcher.is_active()){
 	
 		m_timer_watcher.stop();
 	}
-	
+#endif
+
 	if(m_req_watcher.is_active()){
 		
 		m_req_watcher.stop();
@@ -85,13 +88,16 @@ ClntThread::~ClntThread()
 		m_recv_watcher.stop();
 	}
 	
-	
 	m_loop.break_loop();
-	
-	close(m_fd);
 
-	m_pui->user_clnts.remove(this);
+	if(m_fd > 0){
 	
+		close(m_fd);
+	}
+	if(m_puser_info){
+
+		m_puser_info->user_clnts.remove(this);
+	}
 	
 	delete m_sbuf;
 	
@@ -108,6 +114,8 @@ ClntThread::~ClntThread()
 	pthread_cancel(tid);
 	
 	pthread_exit(NULL);
+	
+	COUT << "ClntThread deconstruct end" << endl;
 }
 
 void ClntThread::start(void)
@@ -171,16 +179,30 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 	// login info check;
 	if(!m_user_manager.login_info_check(user_name, passwd)){
 
-		COUT << "user info check failed" << endl;
+
+		string login_err = "user info check failed";
+
+		COUT << login_err << endl;
+
+		// char res[32] = {};
+		// snprintf(res, 32, %);
+
+		int ret = stream_send(m_fd, (uint8_t*)login_err.c_str(), login_err.length(), 0);
+		if(ret == 0){
+
+			delete this;
+			COUT << "send login err msg failed" << endl;
+			return -2;
+		}
 		return -1;
 	}
 	
 	// push online client info list to each client
 	try{
 
-		UserInfo& ui = m_user_manager[user_name];
+		UserInfo& user_info = m_user_manager[user_name];
 
-		m_pui = &ui;
+		m_puser_info = &user_info;
 	}catch (exception& ex){
 
 		COUT << ex.what() << endl;
@@ -190,18 +212,18 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 	
 	list<ClntThread*>::iterator it;
 	
-	m_pui->user_clnts.push_front(this);
+	m_puser_info->user_clnts.push_front(this);
 
 	Payload pld = Payload(*this, HW_NORMAL_BUF_LEN);
 	pld.m_type = _HW_DATA_TYPE_LOGIN;
 
-	for(it = m_pui->user_clnts.begin(); it != m_pui->user_clnts.end(); ++it){
+	for(it = m_puser_info->user_clnts.begin(); it != m_puser_info->user_clnts.end(); ++it){
 		
 		list<ClntThread*>::iterator it_sub;
 		
 		root = cJSON_CreateArray();
 
-		for(it_sub = m_pui->user_clnts.begin(); it_sub != m_pui->user_clnts.end(); ++it_sub){
+		for(it_sub = m_puser_info->user_clnts.begin(); it_sub != m_puser_info->user_clnts.end(); ++it_sub){
 
 			if(it == it_sub){
 
@@ -211,11 +233,15 @@ int ClntThread::peer_clnt_verify(Payload& r_payload, uint32_t cid)
 			if((*it)->m_cid == (*it_sub)->m_cid){
 				list<ClntThread*>::iterator it_tmp = it_sub;
 				++it_sub;
-				m_pui->user_clnts.erase(it_tmp);
+				m_puser_info->user_clnts.erase(it_tmp);
 				COUT << "client last login info remove" << endl;
 				// delete(it_tmp);
+				if(it_sub ==  m_puser_info->user_clnts.end()){
+
+					break;
+				}
 			}
-			
+
 			cJSON* clnt_node = cJSON_CreateObject();
 
 			cJSON_AddStringToObject(clnt_node, "name", (*it_sub)->m_name.c_str());
@@ -367,7 +393,7 @@ int ClntThread::stream_recv(int fd, uint8_t* buf, int len, int retry_times)
  * header:
  *	len :	2bytes
  *	type:	2bytes
- *	cid :	4bytes
+ *	cid:	4bytes 登陆时记录该客户端的cid, 其余需要转发的命令,这里记录目标cid
  *	body:	len bytes
  * */
 void ClntThread::recv_handle(ev::io& watcher, int event)
@@ -407,7 +433,7 @@ void ClntThread::recv_handle(ev::io& watcher, int event)
 	
 	COUT << "size: " << size << endl;
 	COUT << "type: " << type << endl;
-	COUT << "cid: " << cid << endl;
+	COUT << "cid_dst: " << cid << endl;
 	if(size <= 0){
 
 		return ;
@@ -488,7 +514,7 @@ int ClntThread::request_push_destination(Payload& payload, uint32_t cid) // des 
 	
 	COUT << "request cid: " << cid << endl;
 
-	for(it = m_pui->user_clnts.begin(); it != m_pui->user_clnts.end(); ++it){
+	for(it = m_puser_info->user_clnts.begin(); it != m_puser_info->user_clnts.end(); ++it){
 		
 		COUT << "traverse cid: " << (*it)->m_cid << endl;
 
@@ -562,7 +588,7 @@ void ClntThread::request_thread(void)
 		if(ret == 0){
 
 			delete this;
-
+			COUT << "request thread end" << endl;
 			return ;
 		}
 
@@ -571,12 +597,13 @@ void ClntThread::request_thread(void)
 	}
 }
 
-
+#ifdef TIMER_SWITCH
 void ClntThread::timer_handle(ev::timer& watcher, int event)
 {
 
 	COUT << "timer handle" << endl;
 }
+#endif
 
 int ClntThread::pack(Payload& payload)
 {

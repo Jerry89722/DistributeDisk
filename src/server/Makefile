@@ -10,5 +10,5 @@ $(PROJ): $(OBJS)
 .cpp.o:
 	$(CXX) $(CFLAGS) $^
 clean:
-	$(RM) $(PROJ) $(OBJS)
+	$(RM) $(OBJS)
 

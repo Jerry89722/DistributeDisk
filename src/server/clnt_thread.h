@@ -29,6 +29,8 @@ using namespace std;
 #define HW_BIG_BUF_LEN			256
 #define HW_BIGGEST_BUF_LEN		512
 
+// #define TIMER_SWITCH
+
 enum __HW_DATA_TYPE{
 	_HW_DATA_TYPE_LOGIN,		// 0
 	_HW_DATA_TYPE_HEARTBEAT,	// 1
@@ -77,12 +79,6 @@ public:
 	void work_start(void);
 
 	void notify_it(int which);
-	
-	void recv_handle(ev::io& watcher, int event);
-
-	void request_event_handle(ev::async& watcher, int event);
-	
-	void timer_handle(ev::timer& watcher, int event);
 
 	void request_thread(void);
 
@@ -92,7 +88,6 @@ public:
 
 	deque<Payload> m_deque_cmds;
 
-	UserInfo* m_pui;
 	UserManager& m_user_manager;
 
 	uint32_t m_cid;
@@ -104,14 +99,22 @@ private:
 	uint8_t m_hbuf[HW_HEADER_LEN];
 	uint8_t* m_sbuf;
 	int m_fd;
+	UserInfo* m_puser_info;
 	pthread_t m_work_tid;
 	pthread_t m_request_tid;
 	
 	ev::dynamic_loop m_loop;
 	ev::io m_recv_watcher;
 	ev::async m_req_watcher;
+#ifdef TIMER_SWITCH
 	ev::timer m_timer_watcher;
+	void timer_handle(ev::timer& watcher, int event);
+#endif 
+	
+	void recv_handle(ev::io& watcher, int event);
 
+	void request_event_handle(ev::async& watcher, int event);
+	
 	static void* work_thread(void* arg);
 	static void* request_handle_thread(void* arg);
 

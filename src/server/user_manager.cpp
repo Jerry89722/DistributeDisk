@@ -45,7 +45,7 @@ bool UserManager::login_info_check(const string& name, const string& passwd)
 	
 	string passwd_db = m_dao.get_string_field("password");
 	
-	cout << "passwd in dab: " << passwd_db << endl;
+	cout << "passwd in db: " << passwd_db << endl;
 	cout << "passwd recved: " << passwd << endl;
 
 	if(passwd_db == passwd){
@@ -74,9 +74,9 @@ void UserManager::user_list_gen()
 		
 		cout << "user add into list: " << name << endl;
 
-		UserInfo ui(name);
+		UserInfo user_info(name);
 
-		m_user_clnts.push_back(ui);
+		m_user_clnts.push_back(user_info);
 	}
 }
 
